@@ -1,0 +1,61 @@
+services:
+
+  mongo:
+    image: mongo:7
+    container_name: riva-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-riva}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-rivapass}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-rivadb}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - riva-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: riva-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USER:-riva}:${MONGO_PASSWORD:-rivapass}@mongo:27017/${MONGO_DB:-rivadb}?authSource=admin
+      SPRING_DATA_MONGODB_DATABASE: ${MONGO_DB:-rivadb}
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - riva-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: riva-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: ${API_URL:-http://localhost:8080}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - riva-net
+
+volumes:
+  mongo_data:
+
+networks:
+  riva-net:
+    driver: bridge
