@@ -1,10 +1,10 @@
-package com.pds.proceso_desarrollo_software;
+package com.riva;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class ProcesoDesarrolloSoftwareApplicationTests {
+class RivaApplicationTests {
 
 	@Test
 	void contextLoads() {

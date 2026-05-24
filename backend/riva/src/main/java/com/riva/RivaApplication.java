@@ -1,13 +1,13 @@
-package com.pds.proceso_desarrollo_software;
+package com.riva;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class ProcesoDesarrolloSoftwareApplication {
+public class RivaApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(ProcesoDesarrolloSoftwareApplication.class, args);
+		SpringApplication.run(RivaApplication.class, args);
 	}
 
 }

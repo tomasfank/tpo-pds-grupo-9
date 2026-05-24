@@ -26,10 +26,12 @@ backend/
 │   ├── repository/      # interfaces de Spring Data MongoDB
 │   ├── model/           # entidades del dominio
 │   │   ├── user/
+│   │   ├── category/
 │   │   ├── product/
 │   │   ├── cart/
 │   │   ├── order/
 │   │   └── notification/
+│   ├── exception/       # excepciones de dominio + @RestControllerAdvice
 │   ├── pattern/         # implementaciones de patrones de diseño
 │   │   ├── strategy/    # métodos de pago
 │   │   ├── observer/    # notificaciones
@@ -46,8 +48,9 @@ backend/
 ## Variables de entorno
 
 ```env
-SPRING_DATA_MONGODB_URI=mongodb://riva:rivapass@mongo:27017/rivadb?authSource=admin
-SPRING_DATA_MONGODB_DATABASE=rivadb
+# Spring Boot 4 movió el prefix de spring.data.mongodb.* a spring.mongodb.*
+SPRING_MONGODB_URI=mongodb://riva:rivapass@mongo:27017/rivadb?authSource=admin
+SPRING_MONGODB_DATABASE=rivadb
 JWT_SECRET=changeme_in_production
 ```
 
@@ -95,6 +98,10 @@ En desarrollo local sin Docker, apuntar el URI a `localhost:27017`.
 - Interfaz o clase abstracta `CatalogComponent`
 - `Category` puede contener otras `Category` o `Product` (hojas)
 - Permite recorrer el árbol de categorías de forma uniforme
+
+### NOTAS 
+
+Siempre que apliques patrones de diseño en algún lugar, deja una nota con la información necesaria para saber que patrón es y porque tomaste la desición de utilizarlo allí. 
 
 ## Reglas de negocio críticas
 
