@@ -1,5 +1,11 @@
 # RIVA Backend — Contexto
 
+## Fuente de verdad del dominio
+
+Antes de implementar cualquier controller, service, entidad o regla de negocio, consultar [`docs/RIVA.md`](../docs/RIVA.md) (en la raíz del repo). Allí están los requerimientos funcionales (RF-01 a RF-26), los casos de uso detallados (CU-01 a CU-24) con flujos principal/alternativo/excepciones y precondiciones, y la asignación explícita de patrones de diseño (Strategy, Observer, State, Composite) a casos de uso concretos.
+
+El contexto general del proyecto y la convención de patrones está en el [`CLAUDE.md`](../CLAUDE.md) de la raíz.
+
 ## Stack
 
 - **Framework:** Spring Boot 3
@@ -92,13 +98,14 @@ En desarrollo local sin Docker, apuntar el URI a `localhost:27017`.
 
 ## Reglas de negocio críticas
 
-- Al agregar al carrito: validar stock disponible para la talla y color seleccionados.
-- Al confirmar compra: descontar stock solo si el pago es exitoso.
-- Si el pago falla: no generar pedido, no modificar stock, notificar al cliente.
-- Si el stock se agota entre el carrito y el checkout: cancelar la transacción e informar.
+- Al agregar al carrito: validar stock disponible para la **variante** (combinación de talla y color) seleccionada. Ver CU-14 en `docs/RIVA.md`.
+- Al confirmar la compra (CU-18): se crea el pedido en estado **"Pendiente"** sin descontar stock.
+- Al procesar el pago exitosamente (CU-20): descontar stock de las variantes adquiridas y transicionar el pedido a **"Pagado"**.
+- Si el pago falla (CU-20): el pedido **permanece en "Pendiente"** sin descuento de stock, se notifica al cliente y se le permite reintentar con otro método (vuelve a CU-19).
+- Si el stock de una variante se agota entre el carrito y el procesamiento del pago (concurrencia): cancelar la transacción de pago, mantener el pedido en "Pendiente" e informar al cliente.
 - Las contraseñas deben hashearse con BCrypt antes de persistir.
 - El JWT debe incluir el rol del usuario para el control de acceso en cada endpoint.
-- Solo el Administrador puede avanzar el estado de un pedido.
+- Solo el Administrador puede avanzar el estado de un pedido (CU-23).
 
 ## Comandos locales
 
