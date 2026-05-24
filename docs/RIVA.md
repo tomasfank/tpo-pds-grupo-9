@@ -59,8 +59,8 @@ Se identifican los siguientes actores principales:
 
 | Actor | Descripción | Acciones principales |
 |---|---|---|
-| Cliente | Usuario registrado que realiza compras en la plataforma. | Navegar catálogo, gestionar carrito, comprar, consultar pedidos. |
-| Administrador | Usuario con privilegios elevados que gestiona la plataforma. | Gestionar productos, actualizar estados de pedidos, administrar usuarios. |
+| Cliente | Usuario registrado que realiza compras en la plataforma. | Navegar catálogo, gestionar carrito, comprar, consultar pedidos, configurar notificaciones. |
+| Administrador | Usuario con privilegios elevados que gestiona la plataforma, provisionado internamente. | Gestionar productos, gestionar categorías, avanzar estados de pedidos. |
 | Sistema de Pagos | Actor externo que procesa las transacciones financieras. | Procesar pagos con tarjeta, PayPal, transferencia bancaria. |
 | Sistema de Notificaciones | Actor externo que envía alertas al cliente. | Enviar notificaciones por email, SMS o push. |
 
@@ -70,44 +70,47 @@ Se identifican los siguientes actores principales:
 
 ### 4.1. Módulo de Usuarios
 
-- **RF-01:** El sistema debe permitir el registro de nuevos usuarios indicando nombre, email, contraseña y rol (Cliente o Administrador).
-- **RF-02:** El sistema debe validar credenciales en el inicio de sesión y retornar un mensaje de error ante datos incorrectos.
-- **RF-03:** Cada rol debe habilitar un conjunto diferenciado de funcionalidades dentro de la aplicación.
-- **RF-04:** El sistema debe permitir al usuario recuperar su contraseña mediante el email registrado.
+- **RF-01:** El sistema debe permitir el registro de nuevos usuarios con rol Cliente indicando nombre, apellido, email y contraseña. Las cuentas con rol Administrador son provisionadas internamente.
+- **RF-02:** El sistema debe validar credenciales en el inicio de sesión y retornar un mensaje de error genérico ante datos incorrectos, sin revelar cuál campo falló.
+- **RF-03:** Cada rol debe habilitar un conjunto diferenciado de funcionalidades dentro de la aplicación, con pantallas de login separadas para Cliente y Administrador.
+- **RF-04:** El sistema debe permitir al usuario recuperar su contraseña mediante un enlace enviado al email registrado con token de expiración.
+- **RF-05:** El sistema debe permitir al usuario autenticado cambiar su contraseña validando previamente la contraseña actual.
+- **RF-06:** El sistema debe permitir al usuario autenticado cerrar su sesión, invalidando el token activo.
 
 ### 4.2. Módulo de Catálogo
 
-- **RF-05:** El catálogo debe organizarse en categorías y subcategorías usando una estructura jerárquica (patrón Composite).
-- **RF-06:** Cada producto debe mostrar nombre, precio, stock, descripción, imágenes, tallas disponibles, colores y composición textil.
-- **RF-07:** Los clientes deben poder buscar productos por nombre, categoría, talla, color y rango de precio.
-- **RF-08:** El administrador debe poder crear, editar y desactivar productos del catálogo, incluyendo la gestión de tallas y colores disponibles.
+- **RF-07:** El catálogo debe organizarse en categorías y subcategorías usando una estructura jerárquica (patrón Composite).
+- **RF-08:** Cada producto debe mostrar nombre, precio, descripción, imágenes, material y la lista de variantes disponibles (combinaciones de talla y color con su stock).
+- **RF-09:** Los clientes deben poder buscar productos por nombre, categoría, talla, color y rango de precio.
+- **RF-10:** El administrador debe poder crear, editar y desactivar productos del catálogo, incluyendo la gestión de variantes (tallas y colores) y su stock.
+- **RF-11:** El administrador debe poder crear, editar, reubicar y desactivar categorías y subcategorías dentro de la jerarquía, sin permitir ciclos ni desactivar nodos con productos activos asociados.
 
 ### 4.3. Módulo de Carrito
 
-- **RF-09:** Los clientes deben poder agregar uno o más productos al carrito desde la ficha de producto.
-- **RF-10:** El sistema debe validar la disponibilidad de stock para la talla y color seleccionados al momento de agregar un producto.
-- **RF-11:** Los clientes deben poder modificar la cantidad de ítems o eliminar productos del carrito.
-- **RF-12:** El total del carrito debe recalcularse dinámicamente ante cualquier cambio.
+- **RF-12:** Los clientes deben poder agregar uno o más productos al carrito desde la ficha de producto, seleccionando talla, color y cantidad.
+- **RF-13:** El sistema debe validar la disponibilidad de stock para la variante seleccionada al momento de agregar o modificar la cantidad de un ítem.
+- **RF-14:** Los clientes deben poder modificar la cantidad de ítems, eliminar productos individuales o vaciar el carrito completo.
+- **RF-15:** El total del carrito debe recalcularse dinámicamente ante cualquier cambio.
 
 ### 4.4. Módulo de Pago
 
-- **RF-13:** El sistema debe ofrecer al menos tres métodos de pago: tarjeta de crédito/débito, PayPal y transferencia bancaria.
-- **RF-14:** La selección del método de pago debe poder realizarse en tiempo de ejecución (patrón Strategy).
-- **RF-15:** Ante un pago exitoso, el sistema debe reducir el stock de los productos adquiridos.
-- **RF-16:** Ante un fallo en el pago, el sistema debe notificar al usuario y no generar pedido.
+- **RF-16:** El sistema debe ofrecer al menos tres métodos de pago: tarjeta de crédito/débito, PayPal y transferencia bancaria.
+- **RF-17:** La selección del método de pago debe poder realizarse en tiempo de ejecución (patrón Strategy), permitiendo incorporar nuevos métodos sin modificar el código existente.
+- **RF-18:** Ante un pago exitoso, el sistema debe reducir el stock de las variantes adquiridas y transicionar el pedido a estado "Pagado".
+- **RF-19:** Ante un fallo en el pago, el sistema debe notificar al usuario, mantener el pedido en estado "Pendiente" sin descontar stock y permitir reintentar con otro método.
 
 ### 4.5. Módulo de Pedidos
 
-- **RF-17:** Al confirmar la compra, se debe generar un pedido con estado inicial "Pendiente".
-- **RF-18:** El ciclo de estados del pedido es: Pendiente → Pagado → Enviado → Entregado (patrón State).
-- **RF-19:** Solo el Administrador puede avanzar el estado de un pedido.
-- **RF-20:** El cliente debe poder consultar el historial de sus pedidos con su estado actual.
+- **RF-20:** Al confirmar la compra, se debe generar un pedido con estado inicial "Pendiente" asociado al cliente.
+- **RF-21:** El ciclo de estados del pedido es: Pendiente → Pagado → Enviado → Entregado (patrón State), con transiciones controladas por el estado actual.
+- **RF-22:** Solo el Administrador puede avanzar el estado de un pedido hacia "Enviado" o "Entregado".
+- **RF-23:** El cliente debe poder consultar el historial de sus pedidos con su estado actual y acceder al detalle de cada uno.
 
 ### 4.6. Módulo de Notificaciones
 
-- **RF-21:** El sistema debe notificar al cliente ante cada cambio de estado de su pedido (patrón Observer).
-- **RF-22:** Los canales de notificación disponibles son: email, SMS y push (simulados).
-- **RF-23:** El cliente debe poder configurar qué canales de notificación desea recibir.
+- **RF-24:** El sistema debe notificar al cliente ante cada cambio de estado de su pedido (patrón Observer).
+- **RF-25:** Los canales de notificación disponibles son: email, SMS y push (simulados).
+- **RF-26:** El cliente debe poder configurar qué canales de notificación desea recibir, suscribiéndose o desuscribiéndose dinámicamente.
 
 ---
 
@@ -125,149 +128,425 @@ Se identifican los siguientes actores principales:
 
 ## 6. Especificación de Casos de Uso
 
-A continuación se detallan los casos de uso principales del sistema, organizados por módulo funcional.
+A continuación se detallan los casos de uso del sistema, organizados por módulo funcional. Cada caso de uso es atómico y declara explícitamente sus precondiciones, incluyendo otros casos de uso de los que depende.
 
 ---
 
-### CU-01: Registrar Usuario
+### CU-01: Registrarse como Cliente
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-01 |
-| Nombre | Registrar Usuario |
+| Nombre | Registrarse como Cliente |
 | Actor principal | Usuario no registrado |
-| Precondiciones | El usuario no posee cuenta en el sistema. |
-| Postcondiciones | El usuario queda registrado con el rol seleccionado y puede iniciar sesión. |
-| Flujo principal | 1. El usuario accede a la pantalla de registro. 2. Ingresa nombre, apellido, email, contraseña y selecciona rol (Cliente o Administrador). 3. El sistema valida que el email no esté registrado previamente. 4. El sistema hashea la contraseña y persiste el nuevo usuario. 5. El sistema muestra confirmación de registro exitoso. |
-| Flujo alternativo | 3a. Si el email ya existe: el sistema informa el error y solicita un email diferente. |
+| Precondiciones | El usuario no posee cuenta en el sistema. El usuario accede a la plataforma desde la pantalla pública. |
+| Postcondiciones | El usuario queda registrado con rol Cliente y habilitado para iniciar sesión. |
+| Flujo principal | 1. El usuario accede a la pantalla de registro. 2. Ingresa nombre, apellido, email y contraseña. 3. El sistema valida que el email no esté registrado previamente. 4. El sistema valida formato de email y robustez mínima de la contraseña. 5. El sistema hashea la contraseña con BCrypt y persiste el nuevo usuario con rol Cliente. 6. El sistema muestra confirmación de registro exitoso. |
+| Flujo alternativo | 3a. Si el email ya existe: el sistema informa el error y solicita un email diferente. 4a. Si la contraseña no cumple los requisitos mínimos: el sistema indica las reglas no cumplidas. |
 | Excepciones | Campos obligatorios vacíos: el sistema muestra mensajes de validación por campo. |
 | Patrones aplicados | — |
 
 ---
 
-### CU-02: Iniciar Sesión
+### CU-02: Iniciar Sesión como Cliente
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-02 |
-| Nombre | Iniciar Sesión |
-| Actor principal | Cliente / Administrador |
-| Precondiciones | El usuario posee una cuenta registrada en el sistema. |
-| Postcondiciones | El usuario accede a su panel de acuerdo a su rol. |
-| Flujo principal | 1. El usuario ingresa email y contraseña en la pantalla de login. 2. El sistema valida las credenciales contra el repositorio de usuarios. 3. El sistema establece la sesión y redirige al panel correspondiente al rol. |
-| Flujo alternativo | 2a. Credenciales incorrectas: el sistema muestra error genérico ("Email o contraseña incorrectos") sin indicar cuál de los dos falló. 2b. Cuenta inexistente: mismo tratamiento que 2a. |
-| Excepciones | Tres intentos fallidos consecutivos: el sistema bloquea temporalmente el acceso. |
+| Nombre | Iniciar Sesión como Cliente |
+| Actor principal | Cliente |
+| Precondiciones | El usuario posee una cuenta activa con rol Cliente (registrada mediante CU-01). El usuario no tiene una sesión activa. |
+| Postcondiciones | El cliente accede al panel de cliente con su sesión establecida. |
+| Flujo principal | 1. El cliente ingresa email y contraseña en la pantalla de login. 2. El sistema valida las credenciales contra el repositorio de usuarios. 3. El sistema verifica que el rol asociado sea Cliente. 4. El sistema genera el token de sesión y redirige al panel del cliente. |
+| Flujo alternativo | 2a. Credenciales incorrectas: el sistema muestra error genérico ("Email o contraseña incorrectos") sin indicar cuál de los dos falló. 3a. Si la cuenta corresponde a un rol distinto: el sistema rechaza el acceso por esta vía. |
+| Excepciones | Tres intentos fallidos consecutivos: el sistema bloquea temporalmente el acceso al email durante un período configurable. |
 | Patrones aplicados | — |
 
 ---
 
-### CU-03: Gestionar Carrito de Compras
+### CU-03: Iniciar Sesión como Administrador
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-03 |
-| Nombre | Gestionar Carrito de Compras |
-| Actor principal | Cliente |
-| Precondiciones | El cliente ha iniciado sesión. |
-| Postcondiciones | El carrito refleja los productos seleccionados con el total actualizado. |
-| Flujo principal | 1. El cliente navega el catálogo y selecciona un producto. 2. El sistema verifica disponibilidad de stock. 3. El producto se agrega al carrito con cantidad 1. 4. El cliente puede modificar la cantidad o eliminar el ítem. 5. El sistema recalcula el total dinámicamente en cada cambio. |
-| Flujo alternativo | 2a. Stock insuficiente: el sistema informa la cantidad máxima disponible y no agrega el ítem. 4a. El cliente vacía el carrito: el sistema solicita confirmación antes de proceder. |
-| Excepciones | Sesión expirada: el sistema guarda el carrito y redirige al login. |
+| Nombre | Iniciar Sesión como Administrador |
+| Actor principal | Administrador |
+| Precondiciones | El usuario posee una cuenta activa con rol Administrador previamente provisionada en el sistema. El usuario no tiene una sesión activa. |
+| Postcondiciones | El administrador accede al panel de administración con su sesión establecida. |
+| Flujo principal | 1. El administrador ingresa email y contraseña en la pantalla de login administrativo. 2. El sistema valida las credenciales. 3. El sistema verifica que el rol asociado sea Administrador. 4. El sistema genera el token de sesión y redirige al panel de administración. |
+| Flujo alternativo | 2a. Credenciales incorrectas: el sistema muestra error genérico. 3a. Si la cuenta corresponde a un rol distinto: el sistema rechaza el acceso administrativo. |
+| Excepciones | Tres intentos fallidos consecutivos: el sistema bloquea temporalmente el acceso al email. |
 | Patrones aplicados | — |
 
 ---
 
-### CU-04: Confirmar Compra
+### CU-04: Cerrar Sesión
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-04 |
-| Nombre | Confirmar Compra |
-| Actor principal | Cliente |
-| Precondiciones | El cliente tiene al menos un producto en el carrito y ha iniciado sesión. |
-| Postcondiciones | Se genera un pedido con estado "Pendiente" y se descuenta el stock de los productos. |
-| Flujo principal | 1. El cliente revisa el resumen del carrito y hace clic en "Confirmar compra". 2. El sistema muestra las opciones de método de pago: Tarjeta, PayPal o Transferencia. 3. El cliente selecciona el método y completa los datos requeridos. 4. El sistema delega el procesamiento al strategy de pago correspondiente. 5. El proveedor externo confirma el pago. 6. El sistema descuenta el stock, genera el pedido con estado "Pagado" y notifica al cliente. |
-| Flujo alternativo | 5a. El pago es rechazado: el sistema notifica al cliente y no genera pedido ni descuenta stock. 5b. Timeout de pago: el sistema informa el error y mantiene el carrito intacto. |
-| Excepciones | Producto sin stock al momento del pago: se cancela la transacción y se informa al cliente. |
-| Patrones aplicados | Strategy (métodos de pago), Observer (notificación post-compra), State (estado inicial del pedido) |
+| Nombre | Cerrar Sesión |
+| Actor principal | Cliente / Administrador |
+| Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
+| Postcondiciones | La sesión del usuario queda invalidada y se redirige a la pantalla pública. |
+| Flujo principal | 1. El usuario selecciona la opción "Cerrar sesión" desde su panel. 2. El sistema invalida el token de sesión. 3. El sistema redirige a la pantalla de inicio pública. |
+| Flujo alternativo | — |
+| Excepciones | Token ya inválido o expirado: el sistema completa el cierre de sesión local sin error. |
+| Patrones aplicados | — |
 
 ---
 
-### CU-05: Cambiar Estado de Pedido
+### CU-05: Recuperar Contraseña
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-05 |
-| Nombre | Cambiar Estado de Pedido |
-| Actor principal | Administrador |
-| Precondiciones | Existe al menos un pedido en el sistema. El administrador ha iniciado sesión. |
-| Postcondiciones | El pedido avanza al siguiente estado. El cliente recibe una notificación. |
-| Flujo principal | 1. El administrador accede al panel de gestión de pedidos. 2. Selecciona un pedido y visualiza su estado actual. 3. El sistema muestra las transiciones disponibles según el estado (patrón State). 4. El administrador selecciona la nueva transición (ej. Pagado → Enviado). 5. El sistema actualiza el estado del pedido. 6. El sistema notifica al cliente a través de los canales configurados (patrón Observer). |
-| Flujo alternativo | 3a. El pedido está en estado "Entregado" (final): no se muestran transiciones disponibles. 6a. Fallo en canal de notificación: el sistema registra el error y reintenta; el estado del pedido no se revierte. |
-| Excepciones | Pedido no encontrado: el sistema muestra mensaje de error al administrador. |
-| Patrones aplicados | State (transiciones de estado), Observer (notificaciones) |
+| Nombre | Recuperar Contraseña |
+| Actor principal | Usuario sin sesión activa |
+| Precondiciones | El usuario posee una cuenta registrada con un email accesible. El usuario no tiene una sesión activa. |
+| Postcondiciones | El usuario recibe un enlace de recuperación que le permite establecer una nueva contraseña. |
+| Flujo principal | 1. El usuario accede a la opción "Olvidé mi contraseña" desde la pantalla de login. 2. Ingresa el email asociado a su cuenta. 3. El sistema genera un token de recuperación con expiración. 4. El sistema envía un enlace de recuperación al email registrado. 5. El usuario accede al enlace e ingresa la nueva contraseña dos veces. 6. El sistema valida el token, hashea la nueva contraseña y la persiste. 7. El sistema confirma el cambio y habilita el login con la nueva credencial. |
+| Flujo alternativo | 2a. Email no registrado: el sistema muestra mensaje genérico ("Si el email existe, recibirás instrucciones") por seguridad. 6a. Token vencido o inválido: el sistema rechaza el cambio y solicita iniciar el flujo nuevamente. |
+| Excepciones | Las dos contraseñas ingresadas no coinciden: el sistema solicita reingresarlas. |
+| Patrones aplicados | — |
 
 ---
 
-### CU-06: Gestionar Catálogo de Productos
+### CU-06: Cambiar Contraseña
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-06 |
-| Nombre | Gestionar Catálogo de Productos |
-| Actor principal | Administrador |
-| Precondiciones | El administrador ha iniciado sesión. |
-| Postcondiciones | El catálogo refleja los cambios realizados (nuevo producto, edición o desactivación). |
-| Flujo principal | 1. El administrador accede a la sección de gestión de productos. 2. Puede crear un nuevo producto: ingresa nombre, precio, stock por talla/color, categoría, subcategoría, material y descripción. 3. Puede editar un producto existente: modifica uno o más atributos, incluyendo tallas y colores disponibles. 4. Puede desactivar un producto: el ítem deja de ser visible en el catálogo público. 5. El sistema valida los datos y persiste los cambios. |
-| Flujo alternativo | 2a. Categoría inexistente: el administrador puede crear una nueva categoría o subcategoría en el momento. 5a. Precio negativo o stock inválido: el sistema rechaza la operación con mensaje de validación. |
-| Excepciones | Pérdida de conexión durante el guardado: el sistema informa el error y solicita reintentar. |
-| Patrones aplicados | Composite (jerarquía de categorías) |
+| Nombre | Cambiar Contraseña |
+| Actor principal | Cliente / Administrador |
+| Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
+| Postcondiciones | La contraseña del usuario queda actualizada. |
+| Flujo principal | 1. El usuario accede a la sección de configuración de cuenta. 2. Selecciona "Cambiar contraseña". 3. Ingresa la contraseña actual y la nueva contraseña dos veces. 4. El sistema valida la contraseña actual contra el hash almacenado. 5. El sistema valida la robustez de la nueva contraseña. 6. El sistema hashea y persiste la nueva contraseña. 7. El sistema confirma el cambio. |
+| Flujo alternativo | 4a. Contraseña actual incorrecta: el sistema rechaza el cambio. 5a. Nueva contraseña no cumple requisitos: el sistema indica las reglas no cumplidas. |
+| Excepciones | Las dos contraseñas nuevas no coinciden: el sistema solicita reingresarlas. |
+| Patrones aplicados | — |
 
 ---
 
-### CU-07: Consultar Historial de Pedidos
+### CU-07: Navegar Catálogo por Categorías
 
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-07 |
-| Nombre | Consultar Historial de Pedidos |
-| Actor principal | Cliente |
-| Precondiciones | El cliente ha iniciado sesión y posee al menos un pedido registrado. |
-| Postcondiciones | El cliente visualiza el listado de sus pedidos con detalle de cada uno. |
-| Flujo principal | 1. El cliente accede a "Mis pedidos" desde su panel. 2. El sistema muestra el listado de pedidos ordenados por fecha descendente. 3. El cliente selecciona un pedido para ver su detalle: productos, cantidades, total, método de pago y estado actual. |
-| Flujo alternativo | Sin pedidos registrados: el sistema muestra un mensaje indicando que no hay compras realizadas. |
+| Nombre | Navegar Catálogo por Categorías |
+| Actor principal | Cliente / Usuario no registrado |
+| Precondiciones | Existe al menos una categoría activa con productos visibles. |
+| Postcondiciones | El usuario visualiza los productos contenidos en la categoría o subcategoría seleccionada. |
+| Flujo principal | 1. El usuario accede a la página principal del catálogo. 2. El sistema despliega la jerarquía de categorías y subcategorías (patrón Composite). 3. El usuario selecciona una categoría o subcategoría. 4. El sistema muestra el listado de productos activos contenidos directa o transitivamente en el nodo seleccionado. |
+| Flujo alternativo | 4a. La categoría no contiene productos activos: el sistema muestra mensaje indicando que no hay resultados. |
+| Excepciones | — |
+| Patrones aplicados | Composite (recorrido jerárquico de categorías) |
+
+---
+
+### CU-08: Buscar Productos por Filtros
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-08 |
+| Nombre | Buscar Productos por Filtros |
+| Actor principal | Cliente / Usuario no registrado |
+| Precondiciones | Existe al menos un producto activo en el catálogo. |
+| Postcondiciones | El usuario visualiza los productos que cumplen con los criterios de búsqueda. |
+| Flujo principal | 1. El usuario accede a la barra de búsqueda del catálogo. 2. Ingresa un texto libre y/o aplica filtros (categoría, talla, color, rango de precio). 3. El sistema consulta el catálogo aplicando los filtros. 4. El sistema muestra el listado de productos coincidentes con paginación. |
+| Flujo alternativo | 4a. No hay coincidencias: el sistema sugiere ajustar los filtros y muestra mensaje informativo. |
 | Excepciones | — |
 | Patrones aplicados | — |
 
 ---
 
-### CU-08: Configurar Notificaciones
+### CU-09: Ver Detalle de Producto
 
 | Campo | Detalle |
 |---|---|
-| Identificador | CU-08 |
-| Nombre | Configurar Notificaciones |
+| Identificador | CU-09 |
+| Nombre | Ver Detalle de Producto |
+| Actor principal | Cliente / Usuario no registrado |
+| Precondiciones | El producto existe y se encuentra activo. El usuario lo seleccionó desde CU-07 o CU-08. |
+| Postcondiciones | El usuario visualiza la ficha completa del producto. |
+| Flujo principal | 1. El usuario selecciona un producto del listado. 2. El sistema muestra la ficha con nombre, descripción, precio, imágenes, tallas disponibles, colores disponibles, material y stock por variante. |
+| Flujo alternativo | 2a. Producto sin stock en ninguna variante: el sistema lo muestra como "Sin stock" y deshabilita el agregado al carrito. |
+| Excepciones | Producto desactivado entre la búsqueda y el acceso al detalle: el sistema redirige al catálogo con mensaje informativo. |
+| Patrones aplicados | — |
+
+---
+
+### CU-10: Crear Producto
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-10 |
+| Nombre | Crear Producto |
+| Actor principal | Administrador |
+| Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos una categoría donde ubicar el producto (CU-13). |
+| Postcondiciones | El producto queda creado y disponible en el catálogo público. |
+| Flujo principal | 1. El administrador accede a la sección de gestión de productos. 2. Selecciona "Crear producto". 3. Ingresa nombre, descripción, precio, material, categoría/subcategoría y carga imágenes. 4. Define las variantes disponibles (combinaciones de talla y color) con su stock inicial. 5. El sistema valida los datos. 6. El sistema persiste el producto en estado activo. |
+| Flujo alternativo | 5a. Precio negativo o stock inválido: el sistema rechaza la operación con mensaje de validación. 5b. Categoría inexistente: el administrador es derivado a CU-13 para crearla. |
+| Excepciones | Pérdida de conexión durante el guardado: el sistema informa el error y solicita reintentar. |
+| Patrones aplicados | Composite (asignación a la jerarquía de categorías) |
+
+---
+
+### CU-11: Editar Producto
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-11 |
+| Nombre | Editar Producto |
+| Actor principal | Administrador |
+| Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto a editar existe en el sistema (creado previamente vía CU-10). |
+| Postcondiciones | El producto refleja los cambios realizados en el catálogo. |
+| Flujo principal | 1. El administrador localiza el producto en la sección de gestión. 2. Selecciona "Editar". 3. Modifica uno o más atributos: nombre, descripción, precio, material, categoría, imágenes, variantes o stock. 4. El sistema valida los datos. 5. El sistema persiste los cambios. |
+| Flujo alternativo | 4a. Validación fallida (precio negativo, stock inválido, etc.): el sistema rechaza la operación con mensaje específico. |
+| Excepciones | Pérdida de conexión durante el guardado: el sistema informa el error y solicita reintentar. |
+| Patrones aplicados | Composite (reasignación entre categorías) |
+
+---
+
+### CU-12: Desactivar Producto
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-12 |
+| Nombre | Desactivar Producto |
+| Actor principal | Administrador |
+| Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto existe y se encuentra activo. |
+| Postcondiciones | El producto deja de ser visible en el catálogo público, pero permanece referenciable desde pedidos históricos. |
+| Flujo principal | 1. El administrador localiza el producto en la sección de gestión. 2. Selecciona "Desactivar". 3. El sistema solicita confirmación. 4. El sistema marca el producto como inactivo. |
+| Flujo alternativo | 3a. El administrador cancela la confirmación: el producto permanece activo. |
+| Excepciones | Producto referenciado en carritos activos: el sistema desactiva el producto e informa a los clientes afectados al refrescar su carrito. |
+| Patrones aplicados | — |
+
+---
+
+### CU-13: Gestionar Categorías y Subcategorías
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-13 |
+| Nombre | Gestionar Categorías y Subcategorías |
+| Actor principal | Administrador |
+| Precondiciones | El administrador ha iniciado sesión (vía CU-03). |
+| Postcondiciones | La jerarquía de categorías refleja los cambios realizados (alta, edición o desactivación). |
+| Flujo principal | 1. El administrador accede a la sección de gestión de categorías. 2. Visualiza el árbol completo de categorías y subcategorías (patrón Composite). 3. Selecciona crear, editar o desactivar un nodo. 4. Al crear: ingresa nombre y categoría padre (opcional). 5. Al editar: modifica el nombre o reubica el nodo dentro del árbol. 6. Al desactivar: el sistema valida que no queden productos activos asociados. 7. El sistema persiste los cambios. |
+| Flujo alternativo | 6a. Existen productos activos asociados a la categoría que se intenta desactivar: el sistema impide la desactivación y solicita reasignar o desactivar los productos primero. |
+| Excepciones | Ciclo en la jerarquía al reubicar un nodo: el sistema rechaza la operación. |
+| Patrones aplicados | Composite (manipulación uniforme de nodos de la jerarquía) |
+
+---
+
+### CU-14: Agregar Producto al Carrito
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-14 |
+| Nombre | Agregar Producto al Carrito |
 | Actor principal | Cliente |
-| Precondiciones | El cliente ha iniciado sesión. |
-| Postcondiciones | Las preferencias de notificación del cliente quedan actualizadas. |
-| Flujo principal | 1. El cliente accede a la sección de configuración de su cuenta. 2. Visualiza los canales disponibles: Email, SMS y Push. 3. Activa o desactiva cada canal según su preferencia. 4. El sistema persiste la configuración y la aplica a futuros eventos. |
-| Flujo alternativo | El cliente desactiva todos los canales: el sistema advierte que no recibirá notificaciones sobre sus pedidos. |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente se encuentra en la ficha del producto (vía CU-09). El producto está activo y posee stock en al menos una variante. |
+| Postcondiciones | El producto, con la variante y cantidad seleccionadas, queda incorporado al carrito del cliente. El total del carrito se recalcula. |
+| Flujo principal | 1. El cliente selecciona talla y color en la ficha del producto. 2. Indica la cantidad deseada (por defecto 1). 3. Selecciona "Agregar al carrito". 4. El sistema verifica el stock disponible para la variante seleccionada. 5. El sistema agrega el ítem al carrito y recalcula el total. 6. El sistema confirma el agregado. |
+| Flujo alternativo | 4a. Stock insuficiente para la cantidad solicitada: el sistema informa el máximo disponible y agrega solo esa cantidad si el cliente lo acepta. 5a. El producto ya estaba en el carrito con la misma variante: el sistema suma la cantidad al ítem existente. |
+| Excepciones | Sesión expirada durante el agregado: el sistema preserva la selección y redirige al login. |
+| Patrones aplicados | — |
+
+---
+
+### CU-15: Modificar Cantidad en Carrito
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-15 |
+| Nombre | Modificar Cantidad en Carrito |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). |
+| Postcondiciones | La cantidad del ítem queda actualizada y el total del carrito se recalcula. |
+| Flujo principal | 1. El cliente accede al carrito. 2. Selecciona el ítem a modificar. 3. Cambia la cantidad mediante los controles de incremento/decremento o ingreso directo. 4. El sistema valida la nueva cantidad contra el stock disponible. 5. El sistema actualiza el ítem y recalcula el total. |
+| Flujo alternativo | 4a. Stock insuficiente: el sistema limita la cantidad al máximo disponible e informa al cliente. 3a. El cliente reduce la cantidad a cero: el sistema deriva a CU-16 (Eliminar Producto del Carrito). |
+| Excepciones | Sesión expirada: el sistema preserva el carrito y redirige al login. |
+| Patrones aplicados | — |
+
+---
+
+### CU-16: Eliminar Producto del Carrito
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-16 |
+| Nombre | Eliminar Producto del Carrito |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). |
+| Postcondiciones | El ítem es removido del carrito y el total se recalcula. |
+| Flujo principal | 1. El cliente accede al carrito. 2. Selecciona "Eliminar" sobre un ítem. 3. El sistema solicita confirmación. 4. El sistema remueve el ítem y recalcula el total. |
+| Flujo alternativo | 3a. El cliente cancela: el ítem permanece en el carrito. |
+| Excepciones | Sesión expirada: el sistema preserva el carrito y redirige al login. |
+| Patrones aplicados | — |
+
+---
+
+### CU-17: Vaciar Carrito
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-17 |
+| Nombre | Vaciar Carrito |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem. |
+| Postcondiciones | El carrito queda sin ítems y el total se establece en cero. |
+| Flujo principal | 1. El cliente accede al carrito. 2. Selecciona "Vaciar carrito". 3. El sistema solicita confirmación explícita. 4. El sistema remueve todos los ítems y recalcula el total. |
+| Flujo alternativo | 3a. El cliente cancela: el carrito permanece intacto. |
+| Excepciones | Sesión expirada: el sistema preserva el carrito y redirige al login. |
+| Patrones aplicados | — |
+
+---
+
+### CU-18: Confirmar Compra
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-18 |
+| Nombre | Confirmar Compra |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). Todos los ítems del carrito mantienen stock disponible. |
+| Postcondiciones | Se crea un pedido en estado "Pendiente" asociado al carrito. El cliente avanza a la selección del método de pago (CU-19). |
+| Flujo principal | 1. El cliente accede al carrito y selecciona "Confirmar compra". 2. El sistema muestra el resumen: ítems, cantidades, subtotal y total. 3. El cliente revisa y solicita los datos de envío si corresponde. 4. El cliente confirma el resumen. 5. El sistema verifica nuevamente el stock de todos los ítems. 6. El sistema crea el pedido en estado "Pendiente" (patrón State, estado inicial) y deriva al cliente al flujo de selección de método de pago. |
+| Flujo alternativo | 5a. Stock insuficiente en uno o más ítems: el sistema marca los ítems afectados, ajusta las cantidades o los remueve, y solicita al cliente reconfirmar antes de continuar. |
+| Excepciones | Sesión expirada: el sistema preserva el carrito y redirige al login. |
+| Patrones aplicados | State (creación del pedido en estado inicial "Pendiente") |
+
+---
+
+### CU-19: Seleccionar Método de Pago
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-19 |
+| Nombre | Seleccionar Método de Pago |
+| Actor principal | Cliente |
+| Precondiciones | Existe un pedido en estado "Pendiente" asociado al cliente, creado mediante CU-18. |
+| Postcondiciones | El pedido queda asociado a un método de pago y avanza al procesamiento de pago (CU-20). |
+| Flujo principal | 1. El sistema muestra los métodos de pago disponibles: Tarjeta de crédito/débito, PayPal y Transferencia bancaria. 2. El cliente selecciona uno. 3. El sistema solicita los datos requeridos según el método seleccionado. 4. El cliente ingresa los datos. 5. El sistema valida el formato de los datos sin contactar al proveedor externo. 6. El sistema instancia el strategy de pago correspondiente y avanza a CU-20. |
+| Flujo alternativo | 5a. Datos con formato inválido: el sistema indica el campo a corregir y permanece en la pantalla. 2a. El cliente cancela: el pedido permanece en estado "Pendiente" y el carrito intacto. |
 | Excepciones | — |
-| Patrones aplicados | Observer (suscripción/desuscripción de canales) |
+| Patrones aplicados | Strategy (selección del algoritmo de pago en tiempo de ejecución) |
+
+---
+
+### CU-20: Procesar Pago
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-20 |
+| Nombre | Procesar Pago |
+| Actor principal | Cliente |
+| Actores secundarios | Sistema de Pagos (externo) |
+| Precondiciones | Existe un pedido en estado "Pendiente" con un método de pago seleccionado (vía CU-19). |
+| Postcondiciones | Ante éxito: el pedido transiciona a estado "Pagado", se descuenta el stock y se notifica al cliente. Ante fallo: el pedido permanece en "Pendiente" sin descontar stock. |
+| Flujo principal | 1. El sistema delega el procesamiento al strategy de pago correspondiente. 2. El strategy se comunica con el Sistema de Pagos externo. 3. El proveedor confirma el pago exitoso. 4. El sistema descuenta el stock de las variantes adquiridas. 5. El sistema actualiza el estado del pedido a "Pagado" (patrón State). 6. El sistema dispara la notificación al cliente a través de los canales configurados (patrón Observer). 7. El sistema vacía el carrito y muestra confirmación de la compra. |
+| Flujo alternativo | 3a. Pago rechazado por el proveedor: el sistema mantiene el pedido en "Pendiente", informa al cliente y le permite reintentar con otro método (volver a CU-19). 3b. Timeout en la comunicación con el proveedor: el sistema informa el error y reintenta consulta de estado antes de revertir. |
+| Excepciones | Producto sin stock al momento del pago (concurrencia): el sistema cancela la transacción de pago si fue iniciada, mantiene el pedido en "Pendiente" e informa al cliente. |
+| Patrones aplicados | Strategy (ejecución del método de pago), State (transición Pendiente → Pagado), Observer (notificación post-pago) |
+
+---
+
+### CU-21: Consultar Historial de Pedidos
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-21 |
+| Nombre | Consultar Historial de Pedidos |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
+| Postcondiciones | El cliente visualiza el listado de sus pedidos con el estado actual de cada uno. |
+| Flujo principal | 1. El cliente accede a "Mis pedidos" desde su panel. 2. El sistema muestra el listado de pedidos del cliente ordenados por fecha descendente, indicando número, fecha, total y estado actual de cada uno. |
+| Flujo alternativo | 2a. Sin pedidos registrados: el sistema muestra un mensaje indicando que no hay compras realizadas. |
+| Excepciones | — |
+| Patrones aplicados | — |
+
+---
+
+### CU-22: Consultar Detalle de Pedido
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-22 |
+| Nombre | Consultar Detalle de Pedido |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente seleccionó un pedido desde el historial (vía CU-21). El pedido pertenece al cliente. |
+| Postcondiciones | El cliente visualiza la información completa del pedido seleccionado. |
+| Flujo principal | 1. El cliente selecciona un pedido del historial. 2. El sistema muestra el detalle: productos, variantes (talla y color), cantidades, precios unitarios, total, método de pago utilizado y estado actual con su historial de transiciones. |
+| Flujo alternativo | — |
+| Excepciones | Pedido no pertenece al cliente que consulta: el sistema rechaza el acceso. |
+| Patrones aplicados | — |
+
+---
+
+### CU-23: Avanzar Estado de Pedido
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-23 |
+| Nombre | Avanzar Estado de Pedido |
+| Actor principal | Administrador |
+| Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos un pedido en estado distinto de "Entregado". |
+| Postcondiciones | El pedido avanza al siguiente estado según el ciclo definido. El cliente recibe una notificación por los canales configurados. |
+| Flujo principal | 1. El administrador accede al panel de gestión de pedidos. 2. Filtra y selecciona un pedido. 3. El sistema muestra el estado actual y las transiciones disponibles según el estado (patrón State). 4. El administrador selecciona la transición (Pagado → Enviado o Enviado → Entregado). 5. El sistema actualiza el estado del pedido. 6. El sistema notifica al cliente mediante los canales habilitados (patrón Observer). |
+| Flujo alternativo | 3a. El pedido está en estado "Entregado" (final): no se muestran transiciones disponibles. 6a. Fallo en un canal de notificación: el sistema registra el error, reintenta, y el estado del pedido no se revierte. |
+| Excepciones | Pedido no encontrado: el sistema muestra mensaje de error al administrador. |
+| Patrones aplicados | State (transiciones controladas por el estado actual), Observer (notificación a los suscriptores) |
+
+---
+
+### CU-24: Configurar Canales de Notificación
+
+| Campo | Detalle |
+|---|---|
+| Identificador | CU-24 |
+| Nombre | Configurar Canales de Notificación |
+| Actor principal | Cliente |
+| Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
+| Postcondiciones | Las preferencias de notificación quedan actualizadas y se aplican a futuros eventos generados por el sistema. |
+| Flujo principal | 1. El cliente accede a la sección de configuración de su cuenta. 2. Visualiza los canales disponibles: Email, SMS y Push. 3. Activa o desactiva cada canal según su preferencia. 4. El sistema persiste la configuración y actualiza la suscripción del cliente como observador (patrón Observer). |
+| Flujo alternativo | 3a. El cliente desactiva todos los canales: el sistema advierte que no recibirá notificaciones sobre sus pedidos y solicita confirmación. |
+| Excepciones | — |
+| Patrones aplicados | Observer (suscripción y desuscripción dinámica de canales) |
 
 ---
 
 ## 7. Relaciones entre Casos de Uso
 
-El siguiente esquema muestra las relaciones de inclusión y extensión entre los casos de uso del sistema:
+El siguiente esquema resume las dependencias e inclusiones más relevantes entre los casos de uso del sistema.
 
-- **CU-04** (Confirmar Compra) incluye **CU-03** (Gestionar Carrito) como precondición.
-- **CU-04** extiende a **CU-08** al disparar notificaciones post-compra.
-- **CU-05** (Cambiar Estado) extiende a **CU-08** al disparar notificaciones al cliente.
-- **CU-02** (Iniciar Sesión) es precondición de CU-03, CU-04, CU-05, CU-06 y CU-07.
-- **CU-01** (Registrar Usuario) es precondición de CU-02.
+### 7.1. Precondiciones de autenticación
 
-Los casos de uso CU-05 y CU-06 son exclusivos del rol **Administrador**. Los casos CU-03, CU-04, CU-07 y CU-08 son exclusivos del rol **Cliente**. CU-01 y CU-02 son accesibles a cualquier usuario no autenticado.
+- **CU-01** (Registrarse como Cliente) es precondición de **CU-02**.
+- **CU-02** (Iniciar Sesión como Cliente) es precondición de: CU-04, CU-06, CU-14, CU-15, CU-16, CU-17, CU-18, CU-19, CU-20, CU-21, CU-22 y CU-24.
+- **CU-03** (Iniciar Sesión como Administrador) es precondición de: CU-04, CU-06, CU-10, CU-11, CU-12, CU-13 y CU-23.
+
+### 7.2. Inclusiones (`<<include>>`)
+
+- **CU-18** (Confirmar Compra) incluye **CU-19** (Seleccionar Método de Pago).
+- **CU-19** (Seleccionar Método de Pago) incluye **CU-20** (Procesar Pago).
+- **CU-22** (Consultar Detalle de Pedido) incluye **CU-21** (Consultar Historial de Pedidos) como precondición de navegación.
+- **CU-10** (Crear Producto) incluye **CU-13** (Gestionar Categorías y Subcategorías) cuando se requiere crear una categoría inexistente.
+
+### 7.3. Extensiones (`<<extend>>`)
+
+- **CU-20** (Procesar Pago) extiende a **CU-24** al disparar notificaciones automáticas tras el pago exitoso.
+- **CU-23** (Avanzar Estado de Pedido) extiende a **CU-24** al disparar notificaciones ante cada cambio de estado.
+- **CU-15** (Modificar Cantidad en Carrito) extiende a **CU-16** cuando la cantidad indicada es cero.
+
+### 7.4. Casos de uso por rol
+
+| Rol | Casos de uso accesibles |
+|---|---|
+| Usuario no registrado | CU-01, CU-02, CU-03, CU-05, CU-07, CU-08, CU-09 |
+| Cliente | CU-02, CU-04, CU-05, CU-06, CU-07, CU-08, CU-09, CU-14, CU-15, CU-16, CU-17, CU-18, CU-19, CU-20, CU-21, CU-22, CU-24 |
+| Administrador | CU-03, CU-04, CU-06, CU-07, CU-08, CU-09, CU-10, CU-11, CU-12, CU-13, CU-23 |
 
 ---
 
@@ -282,7 +561,9 @@ Los casos de uso CU-05 y CU-06 son exclusivos del rol **Administrador**. Los cas
 | Notificación | Alerta enviada al cliente informando cambios en el estado de sus pedidos, a través de email, SMS o push. |
 | Pedido | Registro generado al confirmar una compra, que agrupa los productos adquiridos y su información asociada. |
 | Rol | Conjunto de permisos asignado a un usuario: Cliente o Administrador. |
-| Stock | Cantidad de unidades disponibles de un producto en el inventario del sistema. |
+| Stock | Cantidad de unidades disponibles de una variante específica de producto en el inventario del sistema. |
+| Variante | Combinación específica de talla y color de un producto, con su propio stock asociado. |
+| Sesión | Estado autenticado del usuario en la aplicación, representado por un token con expiración. |
 | Strategy | Patrón de diseño que permite seleccionar un algoritmo (método de pago) en tiempo de ejecución. |
 | Observer | Patrón de diseño que permite notificar automáticamente a múltiples suscriptores ante un evento. |
 | State | Patrón de diseño que encapsula los estados y transiciones del ciclo de vida de un pedido. |
