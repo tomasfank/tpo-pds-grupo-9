@@ -194,6 +194,20 @@ Sujeto "1" --> "0..*" CanalNotificacion : notifica a
 Pedido "1" o-- "0..*" CanalNotificacion : observadores
 Cliente "1" --> "1" PreferenciasNotificacion
 
+%% ===================== CONFIGURACION (Singleton) =====================
+class Configuracion {
+    -Configuracion instancia$
+    -String moneda
+    -double tasaIva
+    -double costoEnvio
+    -double umbralEnvioGratis
+    -Map~String, String~ parametros
+    -Configuracion()
+    +obtenerInstancia()$ Configuracion
+    +obtenerParametro(clave String) String
+    +actualizarParametro(clave String, valor String) void
+}
+
 %% ===================== NOTAS DE PATRONES =====================
 note for ComponenteCatalogo "Patrón Composite — Componente (define la operación común polimórfica)"
 note for Categoria "Patrón Composite — Compuesto (contiene hijos y delega obtenerProductos en ellos)"
@@ -202,3 +216,4 @@ note for EstadoPedido "Patrón State"
 note for MetodoPago "Patrón Strategy"
 note for Sujeto "Patrón Observer — Observable (Sujeto)"
 note for CanalNotificacion "Patrón Observer — Observador. notificar() recorre observadores y llama actualizar(pedido)"
+note for Configuracion "Patrón Singleton — instancia única de configuración del sistema."
