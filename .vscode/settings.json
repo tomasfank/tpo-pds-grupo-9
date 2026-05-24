@@ -1,0 +1,10 @@
+{
+  // Spring Boot no publica un JSON schema en SchemaStore (las propiedades son dinámicas,
+  // se descubren vía @ConfigurationProperties en cada dependencia del classpath).
+  // Desactivamos el catálogo automático para que la extensión de YAML no asocie por glob
+  // schemas equivocados (típicamente Kubernetes) a application*.yml.
+  // Para autocomplete real de application.yml conviene instalar "Spring Boot Tools" (vmware.vscode-spring-boot).
+  "yaml.schemaStore.enable": false,
+  "yaml.schemas": {},
+  "java.compile.nullAnalysis.mode": "automatic"
+}

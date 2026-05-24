@@ -27,8 +27,9 @@ services:
     container_name: riva-backend
     restart: unless-stopped
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USER:-riva}:${MONGO_PASSWORD:-rivapass}@mongo:27017/${MONGO_DB:-rivadb}?authSource=admin
-      SPRING_DATA_MONGODB_DATABASE: ${MONGO_DB:-rivadb}
+      # Spring Boot 4: prefix cambió de spring.data.mongodb.* a spring.mongodb.*
+      SPRING_MONGODB_URI: mongodb://${MONGO_USER:-riva}:${MONGO_PASSWORD:-rivapass}@mongo:27017/${MONGO_DB:-rivadb}?authSource=admin
+      SPRING_MONGODB_DATABASE: ${MONGO_DB:-rivadb}
       JWT_SECRET: ${JWT_SECRET:-changeme_in_production}
     ports:
       - "8080:8080"
