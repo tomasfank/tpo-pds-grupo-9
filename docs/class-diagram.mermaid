@@ -1,0 +1,204 @@
+classDiagram
+direction TB
+
+%% ===================== USUARIOS =====================
+class Usuario {
+    <<abstract>>
+    #String id
+    #String nombre
+    #String apellido
+    #String email
+    #String passwordHash
+    +validarCredenciales(password) boolean
+    +cambiarPassword(actual, nueva) void
+}
+class Cliente {
+    -PreferenciasNotificacion preferencias
+    +verHistorialPedidos() List~Pedido~
+}
+class Administrador {
+    +avanzarEstadoPedido(pedido) void
+    +gestionarCatalogo() void
+}
+Usuario <|-- Cliente
+Usuario <|-- Administrador
+
+%% ===================== CATALOGO (Composite) =====================
+%% Componente: define solo la operacion comun (polimorfica)
+class ComponenteCatalogo {
+    <<abstract>>
+    #String id
+    #String nombre
+    #boolean activo
+    +obtenerProductos() List~Producto~
+}
+%% Compuesto: contiene la coleccion y define agregar/quitar
+class Categoria {
+    -List~ComponenteCatalogo~ hijos
+    +obtenerProductos() List~Producto~
+    +agregar(c ComponenteCatalogo) void
+    +quitar(c ComponenteCatalogo) void
+}
+%% Hoja: elemento simple, no delega ni gestiona hijos
+class Producto {
+    <<leaf>>
+    -String descripcion
+    -double precio
+    -String material
+    -String marca
+    -List~String~ imagenes
+    +obtenerProductos() List~Producto~
+    +hayStock() boolean
+}
+class Variante {
+    -Talla talla
+    -String color
+    -int stock
+    +descontar(cantidad) void
+}
+class Talla {
+    <<enumeration>>
+    XS
+    S
+    M
+    L
+    XL
+    XXL
+}
+ComponenteCatalogo <|-- Categoria
+ComponenteCatalogo <|-- Producto
+Categoria o-- "0..*" ComponenteCatalogo : hijos
+Producto "1" *-- "1..*" Variante : variantes
+Variante --> Talla
+
+%% ===================== CARRITO =====================
+class Carrito {
+    -List~ItemCarrito~ items
+    +agregarItem(variante, cantidad) void
+    +modificarCantidad(item, cantidad) void
+    +eliminarItem(item) void
+    +vaciar() void
+    +calcularTotal() double
+}
+class ItemCarrito {
+    -int cantidad
+    +subtotal() double
+}
+Cliente "1" --> "1" Carrito : posee
+Carrito "1" *-- "0..*" ItemCarrito
+ItemCarrito --> Variante
+
+%% ===================== PEDIDOS (State) + Contexto Strategy/Observer =====================
+class Pedido {
+    -String id
+    -LocalDateTime fecha
+    -double total
+    -List~ItemPedido~ items
+    -List~TransicionEstado~ historialEstados
+    -DireccionEnvio direccionEnvio
+    -EstadoPedido estado
+    -MetodoPago metodoPago
+    -List~CanalNotificacion~ observadores
+    +avanzarEstado() void
+    +pagar() ResultadoPago
+    +cambiarMetodoPago(metodoPago MetodoPago) void
+    +suscribir(canal CanalNotificacion) void
+    +desuscribir(canal CanalNotificacion) void
+    +notificar() void
+}
+class ItemPedido {
+    -int cantidad
+    -double precioUnitario
+    +subtotal() double
+}
+class TransicionEstado {
+    -LocalDateTime fecha
+    -String estado
+}
+class DireccionEnvio {
+    -String calle
+    -String numero
+    -String ciudad
+    -String provincia
+    -String codigoPostal
+}
+class EstadoPedido {
+    <<interface>>
+    +avanzar(pedido Pedido) void
+    +nombre() String
+}
+class EstadoPendiente
+class EstadoPagado
+class EstadoEnviado
+class EstadoEntregado
+EstadoPedido <|.. EstadoPendiente
+EstadoPedido <|.. EstadoPagado
+EstadoPedido <|.. EstadoEnviado
+EstadoPedido <|.. EstadoEntregado
+Cliente "1" --> "0..*" Pedido : realiza
+Pedido "1" *-- "1..*" ItemPedido
+Pedido "1" *-- "0..*" TransicionEstado : historial
+Pedido "1" --> "0..1" DireccionEnvio : envío
+Pedido "1" --> "1" EstadoPedido : estado actual
+ItemPedido --> Variante
+
+%% ===================== PAGO (Strategy) =====================
+class MetodoPago {
+    <<interface>>
+    +procesarPago(monto double) ResultadoPago
+    +validarDatos() boolean
+}
+class PagoTarjeta
+class PagoPayPal
+class PagoTransferencia
+class ResultadoPago {
+    -boolean exito
+    -String mensaje
+}
+MetodoPago <|.. PagoTarjeta
+MetodoPago <|.. PagoPayPal
+MetodoPago <|.. PagoTransferencia
+MetodoPago ..> ResultadoPago
+Pedido "1" --> "0..1" MetodoPago : estrategia (delega pago)
+
+%% ===================== NOTIFICACIONES (Observer) =====================
+class Sujeto {
+    <<interface>>
+    +suscribir(canal CanalNotificacion) void
+    +desuscribir(canal CanalNotificacion) void
+    +notificar() void
+}
+class CanalNotificacion {
+    <<interface>>
+    +actualizar(pedido Pedido) void
+}
+class CanalEmail {
+    +actualizar(pedido Pedido) void
+}
+class CanalSMS {
+    +actualizar(pedido Pedido) void
+}
+class CanalPush {
+    +actualizar(pedido Pedido) void
+}
+class PreferenciasNotificacion {
+    -boolean email
+    -boolean sms
+    -boolean push
+}
+Sujeto <|.. Pedido
+CanalNotificacion <|.. CanalEmail
+CanalNotificacion <|.. CanalSMS
+CanalNotificacion <|.. CanalPush
+Sujeto "1" --> "0..*" CanalNotificacion : notifica a
+Pedido "1" o-- "0..*" CanalNotificacion : observadores
+Cliente "1" --> "1" PreferenciasNotificacion
+
+%% ===================== NOTAS DE PATRONES =====================
+note for ComponenteCatalogo "Patrón Composite — Componente (define la operación común polimórfica)"
+note for Categoria "Patrón Composite — Compuesto (contiene hijos y delega obtenerProductos en ellos)"
+note for Producto "Patrón Composite — Hoja {leaf}"
+note for EstadoPedido "Patrón State"
+note for MetodoPago "Patrón Strategy"
+note for Sujeto "Patrón Observer — Observable (Sujeto)"
+note for CanalNotificacion "Patrón Observer — Observador. notificar() recorre observadores y llama actualizar(pedido)"
