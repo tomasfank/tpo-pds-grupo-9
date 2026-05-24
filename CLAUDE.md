@@ -74,7 +74,7 @@ make shell-mongo # mongosh en el contenedor de MongoDB
 
 La carpeta `docs/` concentra los archivos que dan contexto al proyecto a nivel de entregable universitario. Son la fuente de verdad del dominio y deben consultarse antes de implementar cualquier funcionalidad.
 
-- `docs/RIVA.md` — análisis funcional completo elaborado por el grupo: actores, requerimientos funcionales (RF-01 a RF-23), requerimientos no funcionales (RNF-01 a RNF-05) y casos de uso detallados (CU-01 a CU-08)
+- `docs/RIVA.md` — análisis funcional completo elaborado por el grupo: actores, requerimientos funcionales (RF-01 a RF-26), requerimientos no funcionales (RNF-01 a RNF-05) y casos de uso detallados (CU-01 a CU-24)
 - `docs/CONSIGNA.md` — enunciado original de la cátedra con los requisitos de diseño, patrones exigidos, entregables y criterios de evaluación
 
 ## Convenciones generales

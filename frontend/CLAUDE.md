@@ -1,5 +1,11 @@
 # RIVA Frontend — Contexto
 
+## Fuente de verdad del dominio
+
+Antes de implementar cualquier vista, componente o flujo, consultar [`docs/RIVA.md`](../docs/RIVA.md) (en la raíz del repo). Allí están los requerimientos funcionales (RF-01 a RF-26), los casos de uso detallados (CU-01 a CU-24) con flujos principal/alternativo/excepciones y precondiciones, y las relaciones entre casos de uso.
+
+Para cada vista del frontend, partir de los casos de uso del rol correspondiente: la matriz de CU por rol está en la sección 7.4 de `docs/RIVA.md`. El contexto general del proyecto está en el [`CLAUDE.md`](../CLAUDE.md) de la raíz.
+
 ## Stack
 
 - **Framework:** React (Create React App o Vite)
