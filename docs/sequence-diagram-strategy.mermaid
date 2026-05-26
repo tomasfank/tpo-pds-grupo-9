@@ -1,0 +1,90 @@
+sequenceDiagram
+    autonumber
+
+    actor Cliente
+    participant Pedido
+    participant MP as MetodoPago
+    participant PagoTarjeta
+    participant PagoPayPal
+    participant PagoTransferencia
+
+    %% ===================== SELECCIÓN DE MÉTODO DE PAGO =====================
+
+    Cliente->>Pedido: cambiarMetodoPago(metodoPago)
+    note over Pedido: this.metodoPago ← metodoPago
+
+    %% ===================== INICIO DE PAGO =====================
+
+    Cliente->>Pedido: pagar()
+
+    Pedido->>MP: validarDatos()
+
+    %% ===================== ALT: VALIDACIÓN DE DATOS =====================
+
+    alt [datos inválidos]
+        MP-->>Pedido: return false
+        Pedido-->>Cliente: throw DatosInvalidosException
+
+    else [datos válidos]
+        MP-->>Pedido: return true
+
+        Pedido->>MP: procesarPago(total)
+
+        %% ===================== ALT: DELEGACIÓN A ESTRATEGIA CONCRETA =====================
+        %% MetodoPago delega en la implementación concreta seleccionada en tiempo de ejecución
+
+        alt [estrategia = PagoTarjeta]
+            MP->>PagoTarjeta: procesarPago(total)
+            activate PagoTarjeta
+            alt [pasarela aprueba]
+                PagoTarjeta-->>MP: ResultadoPago{exito: true, "Aprobado"}
+            else [pasarela rechaza]
+                PagoTarjeta-->>MP: ResultadoPago{exito: false, "Rechazado"}
+            end
+            deactivate PagoTarjeta
+
+        else [estrategia = PagoPayPal]
+            MP->>PagoPayPal: procesarPago(total)
+            activate PagoPayPal
+            alt [pasarela aprueba]
+                PagoPayPal-->>MP: ResultadoPago{exito: true, "Aprobado"}
+            else [pasarela rechaza]
+                PagoPayPal-->>MP: ResultadoPago{exito: false, "Rechazado"}
+            end
+            deactivate PagoPayPal
+
+        else [estrategia = PagoTransferencia]
+            MP->>PagoTransferencia: procesarPago(total)
+            activate PagoTransferencia
+            alt [pasarela aprueba]
+                PagoTransferencia-->>MP: ResultadoPago{exito: true, "Aprobado"}
+            else [pasarela rechaza]
+                PagoTransferencia-->>MP: ResultadoPago{exito: false, "Rechazado"}
+            end
+            deactivate PagoTransferencia
+        end
+
+        MP-->>Pedido: return ResultadoPago
+
+        %% ===================== ALT: POST-PAGO =====================
+
+        alt [ResultadoPago.exito = true]
+            note over Pedido: avanzarEstado() → EstadoPagado
+            note over Pedido: notificar() — dispara Observer
+            Pedido-->>Cliente: return ResultadoPago{exito: true}
+
+        else [ResultadoPago.exito = false]
+            note over Pedido: estado sin cambio (Pendiente)
+            Pedido-->>Cliente: return ResultadoPago{exito: false}
+        end
+
+    end
+
+    %% ===================== OPT: CAMBIO DE MÉTODO EN TIEMPO DE EJECUCIÓN =====================
+    %% Demuestra el núcleo del patrón Strategy: sustitución en runtime sin modificar Pedido
+
+    opt [Cliente desea cambiar método de pago]
+        Cliente->>Pedido: cambiarMetodoPago(nuevoMetodo)
+        note over Pedido: this.metodoPago ← nuevoMetodo
+        Pedido-->>Cliente: return OK
+    end
