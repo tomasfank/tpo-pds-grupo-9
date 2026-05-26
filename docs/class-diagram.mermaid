@@ -221,12 +221,14 @@ class Configuracion {
     -double tasaIva
     -double costoEnvio
     -double umbralEnvioGratis
-    -Map~String, String~ parametros
+    -Map~String, String~ configData
     -Configuracion()
     +obtenerInstancia()$ Configuracion
     +obtenerParametro(clave String) String
     +actualizarParametro(clave String, valor String) void
 }
+
+Configuracion ..> Configuracion : contiene
 
 %% ===================== NOTAS DE PATRONES =====================
 note for ComponenteCatalogo "Patrón Composite — Componente (define la operación común polimórfica)"
@@ -237,4 +239,4 @@ note for MetodoPago "Patrón Strategy"
 note for Sujeto "Patrón Observer — Observable (Sujeto)"
 note for CanalNotificacion "Patrón Observer — Observador. notificar() recorre observadores y llama actualizar(pedido)"
 note for TiendaFacade "Patrón Facade — Punto de entrada unificado. Simplifica el acceso del cliente a los subsistemas de catálogo, carrito, pago y notificaciones"
-note for Configuracion "Patrón Singleton — instancia única de configuración del sistema."
+note for Configuracion "Patrón Singleton"
