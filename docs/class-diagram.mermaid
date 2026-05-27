@@ -194,26 +194,6 @@ Sujeto "1" --> "0..*" CanalNotificacion : notifica a
 Pedido "1" o-- "0..*" CanalNotificacion : observadores
 Cliente "1" --> "1" PreferenciasNotificacion
 
-%% ===================== FACADE =====================
-%% Punto de entrada unificado que simplifica el acceso a los subsistemas
-class TiendaFacade {
-    -ComponenteCatalogo catalogo
-    -Carrito carrito
-    -MetodoPago metodoPago
-    -CanalNotificacion canalNotificacion
-    +buscarProductos(filtros) List~Producto~
-    +agregarAlCarrito(variante, cantidad) void
-    +confirmarCompra(metodoPago MetodoPago) ResultadoPago
-    +consultarPedidos() List~Pedido~
-    +avanzarEstadoPedido(pedido) void
-}
-%% Facade usa los subsistemas (dependencia de uso)
-TiendaFacade ..> ComponenteCatalogo : usa
-TiendaFacade ..> Carrito : usa
-TiendaFacade ..> Pedido : usa
-TiendaFacade ..> MetodoPago : usa
-TiendaFacade ..> CanalNotificacion : usa
-
 %% ===================== CONFIGURACION (Singleton) =====================
 class Configuracion {
     -Configuracion instancia$
@@ -238,5 +218,4 @@ note for EstadoPedido "Patrón State"
 note for MetodoPago "Patrón Strategy"
 note for Sujeto "Patrón Observer — Observable (Sujeto)"
 note for CanalNotificacion "Patrón Observer — Observador. notificar() recorre observadores y llama actualizar(pedido)"
-note for TiendaFacade "Patrón Facade — Punto de entrada unificado. Simplifica el acceso del cliente a los subsistemas de catálogo, carrito, pago y notificaciones"
 note for Configuracion "Patrón Singleton"
