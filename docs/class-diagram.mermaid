@@ -125,12 +125,29 @@ class DireccionEnvio {
 class EstadoPedido {
     <<interface>>
     +avanzar(pedido Pedido) void
+    +puedeAvanzar() boolean
     +nombre() String
 }
-class EstadoPendiente
-class EstadoPagado
-class EstadoEnviado
-class EstadoEntregado
+class EstadoPendiente {
+    +avanzar(pedido Pedido) void
+    +puedeAvanzar() boolean
+    +nombre() String
+}
+class EstadoPagado {
+    +avanzar(pedido Pedido) void
+    +puedeAvanzar() boolean
+    +nombre() String
+}
+class EstadoEnviado {
+    +avanzar(pedido Pedido) void
+    +puedeAvanzar() boolean
+    +nombre() String
+}
+class EstadoEntregado {
+    +avanzar(pedido Pedido) void
+    +puedeAvanzar() boolean
+    +nombre() String
+}
 EstadoPedido <|.. EstadoPendiente
 EstadoPedido <|.. EstadoPagado
 EstadoPedido <|.. EstadoEnviado
@@ -143,54 +160,114 @@ Pedido "1" --> "1" EstadoPedido : estado actual
 ItemPedido --> Variante
 
 %% ===================== PAGO (Strategy) =====================
-class MetodoPago {
-    <<interface>>
-    +procesarPago(monto double) ResultadoPago
-    +validarDatos() boolean
-}
-class PagoTarjeta
-class PagoPayPal
-class PagoTransferencia
-class ResultadoPago {
-    -boolean exito
-    -String mensaje
+%% ===================== PASARELAS DE PAGO (Adapter) =====================
+namespace Pagos {
+    class MetodoPago {
+        <<interface>>
+        +procesarPago(monto double) ResultadoPago
+        +validarDatosPago() boolean
+    }
+    class PagoTarjeta {
+        -String numeroTarjeta
+        -String titular
+        -String vencimiento
+        -String cvv
+        -AdapterTarjeta adapter
+        +procesarPago(monto double) ResultadoPago
+        +validarDatosPago() boolean
+    }
+    class PagoPayPal {
+        -String emailCuenta
+        -AdapterPayPal adapter
+        +procesarPago(monto double) ResultadoPago
+        +validarDatosPago() boolean
+    }
+    class PagoTransferencia {
+        -String cbu
+        -String alias
+        -String banco
+        -AdapterTransferencia adapter
+        +procesarPago(monto double) ResultadoPago
+        +validarDatosPago() boolean
+    }
+    class ResultadoPago {
+        -boolean exito
+        -String mensaje
+    }
+    class AdapterPagoExterno {
+        <<interface>>
+        +procesar(monto double) ResultadoPago
+    }
+    class AdapterTarjeta {
+        -PasarelaTarjetaExterna pasarela
+        +procesar(monto double) ResultadoPago
+    }
+    class AdapterPayPal {
+        -ServicioPayPalExterno servicio
+        +procesar(monto double) ResultadoPago
+    }
+    class AdapterTransferencia {
+        -ServicioBancoExterno servicio
+        +procesar(monto double) ResultadoPago
+    }
+    class PasarelaTarjetaExterna {
+        +autorizarImporte(importe double) RespuestaTarjeta
+    }
+    class ServicioPayPalExterno {
+        +enviarPago(email String, total double) RespuestaPayPal
+    }
+    class ServicioBancoExterno {
+        +registrarTransferencia(cbu String, importe double) RespuestaBanco
+    }
 }
 MetodoPago <|.. PagoTarjeta
 MetodoPago <|.. PagoPayPal
 MetodoPago <|.. PagoTransferencia
 MetodoPago ..> ResultadoPago
 Pedido "1" --> "0..1" MetodoPago : estrategia (delega pago)
+AdapterPagoExterno <|.. AdapterTarjeta
+AdapterPagoExterno <|.. AdapterPayPal
+AdapterPagoExterno <|.. AdapterTransferencia
+PagoTarjeta --> AdapterTarjeta : usa
+PagoPayPal --> AdapterPayPal : usa
+PagoTransferencia --> AdapterTransferencia : usa
+AdapterTarjeta --> PasarelaTarjetaExterna : adapta
+AdapterPayPal --> ServicioPayPalExterno : adapta
+AdapterTransferencia --> ServicioBancoExterno : adapta
+AdapterPagoExterno ..> ResultadoPago
 
 %% ===================== NOTIFICACIONES (Observer) =====================
-class Sujeto {
-    <<interface>>
-    +suscribir(canal CanalNotificacion) void
-    +desuscribir(canal CanalNotificacion) void
-    +notificar() void
+namespace Notificaciones {
+    class SujetoObservable {
+        <<interface>>
+        +suscribir(canal CanalNotificacion) void
+        +desuscribir(canal CanalNotificacion) void
+        +notificar() void
+    }
+    class CanalNotificacion {
+        <<interface>>
+        +actualizar(pedido Pedido) void
+    }
+    class CanalEmail {
+        +actualizar(pedido Pedido) void
+    }
+    class CanalSMS {
+        +actualizar(pedido Pedido) void
+    }
+    class CanalPush {
+        +actualizar(pedido Pedido) void
+    }
+    class PreferenciasNotificacion {
+        -boolean email
+        -boolean sms
+        -boolean push
+    }
 }
-class CanalNotificacion {
-    <<interface>>
-    +actualizar(pedido Pedido) void
-}
-class CanalEmail {
-    +actualizar(pedido Pedido) void
-}
-class CanalSMS {
-    +actualizar(pedido Pedido) void
-}
-class CanalPush {
-    +actualizar(pedido Pedido) void
-}
-class PreferenciasNotificacion {
-    -boolean email
-    -boolean sms
-    -boolean push
-}
-Sujeto <|.. Pedido
+SujetoObservable <|.. Pedido
 CanalNotificacion <|.. CanalEmail
 CanalNotificacion <|.. CanalSMS
 CanalNotificacion <|.. CanalPush
-Sujeto "1" --> "0..*" CanalNotificacion : notifica a
+SujetoObservable "1" --> "0..*" CanalNotificacion : notifica a
 Pedido "1" o-- "0..*" CanalNotificacion : observadores
 Cliente "1" --> "1" PreferenciasNotificacion
 
@@ -214,8 +291,10 @@ Configuracion ..> Configuracion : contiene
 note for ComponenteCatalogo "Patrón Composite"
 note for Categoria "Patrón Composite — Compuesto (contiene hijos y delega obtenerProductos en ellos)"
 note for Producto "Patrón Composite — Hoja {leaf}"
-note for EstadoPedido "Patrón State"
-note for MetodoPago "Patrón Strategy"
-note for Sujeto "Patrón Observer — Observable (Sujeto)"
+note for EstadoPedido "Patrón State — cada estado controla si puede avanzar y define la transición"
+note for EstadoEntregado "Estado final: puedeAvanzar() devuelve false"
+note for MetodoPago "Patrón Strategy — Pedido delega el algoritmo de pago al método seleccionado en runtime"
+note for AdapterPagoExterno "Patrón Adapter — normaliza APIs externas de pago a ResultadoPago"
+note for SujetoObservable "Patrón Observer — Observable (Sujeto) con notificar() por convención"
 note for CanalNotificacion "Patrón Observer — Observador. notificar() recorre observadores y llama actualizar(pedido)"
 note for Configuracion "Patrón Singleton"
