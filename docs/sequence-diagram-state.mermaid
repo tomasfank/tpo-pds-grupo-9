@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor Administrador
+    participant Pedido
+    participant EstadoActual as EstadoPendiente
+    participant EstadoSiguiente as EstadoPagado
+    participant TransicionEstado
+
+    Administrador->>Pedido: avanzarEstado()
+
+    Pedido->>EstadoActual: avanzar(pedido)
+
+    EstadoActual->>Pedido: setEstado(EstadoPagado)
+
+    Pedido->>EstadoSiguiente: nombre()
+    EstadoSiguiente-->>Pedido: "Pagado"
+
+    Pedido->>TransicionEstado: crear(fechaActual, "Pagado")
+    TransicionEstado-->>Pedido: transicion creada
+
+    Pedido->>Pedido: agregar transicion a historialEstados
+
+    Pedido-->>Administrador: estado actualizado
