@@ -18,11 +18,15 @@ Cuando cambia el estado de un pedido, el pedido ejecuta notificar(), y cada cana
 
 ## State
 
-**State** se usa para representar el ciclo de vida de un pedido. Pedido tiene un atributo EstadoPedido, y los estados concretos son EstadoPendiente, EstadoPagado, EstadoEnviado y EstadoEntregado.
+**State** se usa para representar el ciclo de vida de un pedido. `Pedido` funciona como contexto, tiene un atributo "estado" de tipo `EstadoPedido` que referencia al estado actual.
 
-Cada estado sabe si puede avanzar y cómo hacerlo. Por ejemplo, un pedido pendiente puede pasar a pagado, uno pagado puede pasar, y uno entregado ya no debería avanzar. Esto evita llenar Pedido de condicionales y encapsula las reglas de transición dentro de cada clase de estado.
+La interfaz `EstadoPedido` define tres métodos: `avanzar(pedido Pedido)`, `puedeAvanzar()` y `nombre()`. Los estados concretos que la implementan son `EstadoPendiente`, `EstadoPagado`, `EstadoEnviado` y `EstadoEntregado`.
 
-[screenshot-state.png]
+`avanzar(pedido Pedido)` recibe el propio Pedido como parámetro: esto le permite al estado concreto cambiar del estado actual del pedido al siguiente, sin que Pedido sepa la lógica de transición. `puedeAvanzar()` devuelve true si la transición es válida desde el estado actual. `nombre()` devuelve el nombre del estado, utilizado para registrar cada cambio en `historialEstados`.
+
+La cadena de transición es: Pendiente → Pagado → Enviado → Entregado. `EstadoEntregado` es el estado final: su `puedeAvanzar()` devuelve `false` y su `avanzar` no hace nada. Esto evita llenar `Pedido` de condicionales y encapsula las reglas de transición dentro de cada clase de estado.
+
+[./images/state-section.png](./images/state-section-blur.png)
 
 ## Singleton
 
