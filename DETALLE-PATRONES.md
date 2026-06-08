@@ -26,11 +26,11 @@ Cada estado sabe si puede avanzar y cómo hacerlo. Por ejemplo, un pedido pendie
 
 ## Singleton
 
-**Singleton** aparece en Configuracion. Esta clase centraliza parámetros generales del ecommerce, como moneda, tasaIVA, costoEnvio y umbralEnvioGratis.
+**Singleton** aparece en Configuracion. Esta clase centraliza parámetros generales del ecommerce como moneda, tasaIVA, costoEnvio y umbralEnvioGratis.
 
-La idea es que exista una única instancia de configuración accesible desde el sistema mediante obtenerInstancia(). Esto permite que distintas partes del ecommerce consulten los mismos valores globales sin crear múltiples objetos de configuración con datos inconsistentes. En el diagrama actual está modelado como Singleton, aunque convendría conectarlo con clases como Pedido, Carrito o TiendaFacade para mostrar claramente quíen lo utiliza.
+La clase se contiene a si misma: tiene un atributo estático `instancia` del propio tipo `Configuracion`, representado en el diagrama con una flecha de dependencia que va de la clase hacia sí misma. El acceso se hace únicamente vía `obtenerInstancia()`, que crea ese objeto la primera vez y devuelve la misma referencia en llamadas posteriores. Así, cualquier parte del sistema que necesite saber la moneda, la tasa de IVA o el umbral de envío gratis siempre consulta el mismo objeto sin riesgo de inconsistencias.
 
-[screenshot-singleton.png]
+[./images/singleton-section.png](./images/singleton-section.png)
 
 ## Composite
 
