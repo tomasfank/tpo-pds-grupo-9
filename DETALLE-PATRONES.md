@@ -10,11 +10,13 @@ El **Adapter** complementa a Strategy porque cada método de pago puede necesita
 
 ## Observer
 
-**Observer** aparece en el sistema de notificaciones de pedidos. Pedido actúa como sujeto observable, manteniendo una lista de CanalNotificacion. Los canales concretos, como CanalEmail, CanalSMS y CanalPush, son observadores.
+**Observer** aparece en el sistema de notificaciones de pedidos. La interfaz `SujetoObservable` define los métodos suscribir(), desuscribir() y notificar(). Pedido implementa esa interfaz y actúa como sujeto concreto: mantiene una lista de `CanalNotificacion` y elige cuando disparar las notificaciones.
 
-Cuando cambia el estado de un pedido, el pedido ejecuta notificar(), y cada canal recibe la actualización mediante actualizar(pedido). Esto permite avisar al cliente por distintos medios sin que Pedido tenga que conocer los detalles de cada canal.
+La interfaz observador (`CanalNotificacion`) define el método `actualizar(pedido)` que cada canal debe implementar. Los observadores concretos como `CanalEmail`, `CanalSMS` y `CanalPush` implementan esa interfaz.
 
-[screenshot-observer.png]
+Cuando cambia el estado de un pedido, este ejecuta `notificar()`, que recorre la lista de canales y llama a `actualizar(pedido)` en cada uno. Esto permite avisar al cliente por distintos medios sin que `Pedido` conozca los detalles de cada canal.
+
+[./images/observer-section.png](./images/observer-section-blur.png)
 
 ## State
 

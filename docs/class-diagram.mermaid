@@ -267,7 +267,6 @@ CanalNotificacion <|.. CanalEmail
 CanalNotificacion <|.. CanalSMS
 CanalNotificacion <|.. CanalPush
 SujetoObservable "1" --> "0..*" CanalNotificacion : notifica a
-Pedido "1" o-- "0..*" CanalNotificacion : observadores
 Cliente "1" --> "1" PreferenciasNotificacion
 
 %% ===================== FACADE =====================
