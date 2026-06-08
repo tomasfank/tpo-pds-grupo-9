@@ -37,7 +37,7 @@ El catálogo se organiza en tres categorías principales por género, cada una c
 
 | Hombres | Mujeres | Niños |
 |---|---|---|
-| Camisetas, Camisas, Pantalones, Chaquetas, Hoodies, Ropa deportiva, Accesorios | Vestidos, Tops, Pantalones, Faldas, Chaquetas, Ropa deportiva, Accesorios | Camisetas, Pantalones, Conjuntos, Ropa deportiva, Accesorios |
+| Camisetas, Camisas, Pantalones, Camperas, Hoodies, Ropa deportiva, Accesorios | Vestidos, Tops, Pantalones, Faldas, Camperas, Ropa deportiva, Accesorios | Camisetas, Pantalones, Conjuntos, Ropa deportiva, Accesorios |
 
 ### 2.2. Atributos de Productos
 
