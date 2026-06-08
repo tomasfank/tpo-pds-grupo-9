@@ -44,7 +44,7 @@ La clase base es `ComponenteCatalogo`, que define la operación `obtenerProducto
 
 La ventaja del patrón es que el sistema puede tratar de forma uniforme a categorías y productos. Si llama a `obtenerProductos()` sobre una categoría, esta puede recorrer sus hijos y devolver todos los productos contenidos directa o indirectamente. Si se llama sobre un producto, simplemente devuelve ese producto. Esto permite manejar categorías, subcategorías y productos sin lógica especial para cada caso.
 
-[screenshot-composite.png]
+[./images/composite-section.png](./images/composite-section.png)
 
 ## Facade
 
