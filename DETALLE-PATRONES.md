@@ -34,13 +34,15 @@ La idea es que exista una única instancia de configuración accesible desde el 
 
 ## Composite
 
-**Composite** se usa para modelar el catálogo de productos como una estructura jerárquica. La clase base es ComponenteCatalogo, que define operaciones comunes como obtenerProductos(). A partir de esa abstracción aparecen dos tipos de elementos: Categoría y Producto.
+**Composite** se usa para modelar el catálogo de productos como una estructura jerárquica.
 
-Categoría funciona como el componente compuesto, porque puede contener una lista de hijos del tipo ComponenteCatalogo. Esos hijos pueden ser otras categorías o productos. Por ejemplo, una categoría "Ropa" podría contener la subcategoría "Remeras", y dentro de esa subcategoría podría haber varios productos.
+La clase base es `ComponenteCatalogo`, que define la operación `obtenerProductos()`. A partir de esa abstracción aparecen dos tipos de elementos: `Categoria` y `Producto`.
 
-Producto, en cambio, funciona como hoja del árbol. No contiene otros elementos, sino que representa un producto final del catálogo.
+`Categoria` funciona como el componente compuesto, porque contiene una lista de hijos del tipo `ComponenteCatalogo`, que pueden ser otras categorías o productos directamente. Por ejemplo, una categoría como "Hombre" contiene subcategorías como "Camisetas" o "Pantalones", cada una de las cuales agrupa los `Producto` correspondientes.
 
-La ventaja del patrón es que el sistema puede tratar de forma uniforme a categorías y productos. Si llama a obtenerProductos() sobre una categoría, esta puede recorrer sus hijos y devolver todos los productos contenidos directa o indirectamente. Si se llama sobre un producto, simplemente devuelve ese producto. Esto permite manejar categorías, subcategorías y productos sin lógica especial para cada caso.
+`Producto`, en cambio, funciona como hoja del árbol. No contiene otros elementos, sino que representa un producto final del catálogo. 
+
+La ventaja del patrón es que el sistema puede tratar de forma uniforme a categorías y productos. Si llama a `obtenerProductos()` sobre una categoría, esta puede recorrer sus hijos y devolver todos los productos contenidos directa o indirectamente. Si se llama sobre un producto, simplemente devuelve ese producto. Esto permite manejar categorías, subcategorías y productos sin lógica especial para cada caso.
 
 [screenshot-composite.png]
 
