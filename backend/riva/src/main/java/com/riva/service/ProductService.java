@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.riva.dto.CreateProductRequest;
+import com.riva.dto.ProductSearchCriteria;
 import com.riva.dto.ProductVariantDto;
 import com.riva.dto.UpdateProductRequest;
 import com.riva.exception.NotFoundException;
@@ -85,8 +86,27 @@ public class ProductService {
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado: " + id));
     }
 
+    public Product requireActiveProduct(String id) {
+        Product product = requireProduct(id);
+        if (!product.isActive()) {
+            throw new NotFoundException("Producto no encontrado: " + id);
+        }
+        return product;
+    }
+
     public List<Product> findAllActive() {
         return productRepository.findByActiveTrue();
+    }
+
+    public List<Product> searchActive(ProductSearchCriteria criteria) {
+        return productRepository.findByActiveTrue().stream()
+                .filter(product -> matchesName(product, criteria.name()))
+                .filter(product -> matchesCategory(product, criteria.categoryId()))
+                .filter(product -> matchesSize(product, criteria.size()))
+                .filter(product -> matchesColor(product, criteria.color()))
+                .filter(product -> matchesPriceMin(product, criteria.priceMin()))
+                .filter(product -> matchesPriceMax(product, criteria.priceMax()))
+                .toList();
     }
 
     private List<ProductVariant> mapVariants(List<ProductVariantDto> dtos) {
@@ -110,5 +130,46 @@ public class ProductService {
             throw new ValidationException("Las variantes no pueden repetir la combinación talla+color");
         }
         return variants;
+    }
+
+    private boolean matchesName(Product product, String name) {
+        if (name == null || name.isBlank()) {
+            return true;
+        }
+        return product.getName() != null
+                && product.getName().toLowerCase().contains(name.trim().toLowerCase());
+    }
+
+    private boolean matchesCategory(Product product, String categoryId) {
+        if (categoryId == null || categoryId.isBlank()) {
+            return true;
+        }
+        String normalized = categoryId.trim();
+        return normalized.equals(product.getCategoryId()) || product.getCategoryAncestorIds().contains(normalized);
+    }
+
+    private boolean matchesSize(Product product, com.riva.model.product.Size size) {
+        if (size == null) {
+            return true;
+        }
+        return product.getVariants().stream().anyMatch(variant -> size.equals(variant.getSize()));
+    }
+
+    private boolean matchesColor(Product product, String color) {
+        if (color == null || color.isBlank()) {
+            return true;
+        }
+        String normalized = color.trim().toLowerCase();
+        return product.getVariants().stream()
+                .anyMatch(variant -> variant.getColor() != null
+                        && variant.getColor().trim().toLowerCase().equals(normalized));
+    }
+
+    private boolean matchesPriceMin(Product product, java.math.BigDecimal priceMin) {
+        return priceMin == null || product.getPrice().compareTo(priceMin) >= 0;
+    }
+
+    private boolean matchesPriceMax(Product product, java.math.BigDecimal priceMax) {
+        return priceMax == null || product.getPrice().compareTo(priceMax) <= 0;
     }
 }

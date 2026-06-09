@@ -38,7 +38,9 @@ public class CatalogService {
      * Ensambla el Composite en memoria y luego lo proyecta al DTO de respuesta.
      */
     public List<CategoryTreeNode> getTree() {
-        List<Category> categories = categoryRepository.findAll();
+        List<Category> categories = categoryRepository.findAll().stream()
+                .filter(Category::isActive)
+                .toList();
         List<Product> activeProducts = productRepository.findByActiveTrue();
 
         Map<String, Category> byId = new HashMap<>();

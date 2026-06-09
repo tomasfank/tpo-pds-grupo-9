@@ -1,29 +1,40 @@
-export type ApiCategory = "men's clothing" | "women's clothing"
+export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL'
 
-export type CategoryKey = 'men' | 'women' | 'kids'
-
-export type ViewName = 'home' | 'category' | 'product' | 'cart'
+export type ProductVariant = {
+  size: Size | null
+  color: string | null
+  stock: number
+}
 
 export type Product = {
-  id: number
-  title: string
+  id: string
+  name: string
+  description: string
+  brand: string
   price: number
-  description: string
-  category: string
-  image: string
-  rating?: {
-    rate: number
-    count: number
-  }
+  material: string
+  imageUrls: string[]
+  active: boolean
+  categoryId: string
+  categoryAncestorIds: string[]
+  variants: ProductVariant[]
 }
 
-export type CartItem = Product & {
-  quantity: number
+export type CategoryTreeNode = {
+  id: string
+  name: string
+  active: boolean
+  activeProducts: number
+  children: CategoryTreeNode[]
 }
 
-export type CategoryConfig = {
-  key: CategoryKey
-  label: string
-  apiCategory?: ApiCategory
-  description: string
+export type ProductFilters = {
+  name?: string
+  categoryId?: string
+  size?: Size
+  color?: string
+  priceMin?: number
+  priceMax?: number
 }
+
+export type ViewName = 'home' | 'category' | 'product'

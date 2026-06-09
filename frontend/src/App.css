@@ -25,6 +25,7 @@
 .cart-link,
 .hero-actions button,
 .product-actions button,
+.filter-band button,
 .detail-copy button,
 .cart-summary button,
 .empty-state button,
@@ -188,6 +189,7 @@ h3 {
 }
 
 .category-band,
+.filter-band,
 .product-section,
 .catalog-view,
 .product-detail,
@@ -255,6 +257,41 @@ h3 {
   gap: clamp(18px, 2.5vw, 34px);
 }
 
+.filter-band {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px minmax(140px, 0.5fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.filter-band input,
+.filter-band select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--white);
+  font: inherit;
+}
+
+.filter-band button {
+  min-height: 46px;
+  border: 1px solid var(--accent);
+  padding: 10px 16px;
+  color: var(--white);
+  background: var(--accent);
+  font-weight: 800;
+}
+
+.filter-band .ghost-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: transparent;
+}
+
 .product-tile {
   min-width: 0;
   animation: enterUp 520ms ease both;
@@ -306,14 +343,16 @@ h3 {
 }
 
 .product-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
   gap: 8px;
   margin-top: 16px;
 }
 
 .product-actions button,
+.stock-pill,
 .cart-item button {
-  flex: 1;
   min-height: 40px;
   padding: 8px 11px;
   border: 1px solid var(--line);
@@ -324,10 +363,17 @@ h3 {
   font-weight: 750;
 }
 
-.product-actions button:last-child {
+.product-actions button {
   color: var(--white);
   border-color: var(--accent);
   background: var(--accent);
+}
+
+.stock-pill {
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .product-actions button:hover,
@@ -379,6 +425,38 @@ h3 {
 
 .rating {
   margin: 22px 0;
+}
+
+.variant-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 18px;
+}
+
+.variant-chip,
+.stock-label {
+  display: inline-grid;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid rgba(139, 30, 45, 0.24);
+  padding: 7px 12px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.variant-chip.is-empty,
+.stock-label.is-empty {
+  color: var(--muted);
+  border-color: var(--line);
+  background: transparent;
+}
+
+.stock-label {
+  color: var(--white);
+  background: var(--accent);
 }
 
 .cart-layout {
@@ -491,6 +569,7 @@ h3 {
   }
 
   .category-band,
+  .filter-band,
   .product-detail,
   .cart-layout {
     grid-template-columns: 1fr;
@@ -550,8 +629,9 @@ h3 {
   }
 
   .product-actions,
+  .filter-band,
   .hero-actions {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .cart-item {
