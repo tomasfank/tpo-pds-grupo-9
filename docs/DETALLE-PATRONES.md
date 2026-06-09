@@ -54,10 +54,8 @@ La ventaja del patrón es que el sistema puede tratar de forma uniforme a catego
 
 ## Facade
 
-Funciona como un **punto de entrada simplificado** para operar con varios subsistemas del sistema, como catálogo, carrito, pedidos, pagos y notificaciones.
+Sin **Facade**, cualquier cliente externo tendría que orquestar manualmente los subsistemas en el orden correcto: verificar el carrito, instanciar un `Pedido`, invocar `procesarPago()` sobre el `MetodoPago` elegido y, finalmente, llamar a `notificar()` para avisar al cliente por sus canales configurados.
 
-En lugar de que una parte externa del sistema tenga que interactuar directamente con muchas clases distintas, puede usar métodos más generales de TiendaFacade, como buscarProductos(), agregarAlCarrito(), confirmarCompra(), consultarPedidos() o avanzarEstadoPedido().
+`TiendaFacade` encapsula toda esa secuencia en un único método `confirmarCompra()` que simplifica la operatoria para el cliente. Internamente crea y coordina los objetos necesarios (`Pedido`, `MetodoPago`, `CanalNotificacion`) sin exponerlos. El cliente solo conoce la fachada y recibe un `ResultadoPago`. No necesita saber cómo funciona ningón subsistema por dentro.
 
-Por ejemplo, confirmar una compra puede involucrar varias acciones internas: revisar el carrito, crear un pedido, procesar el pago y disparar notificaciones. Con Facade, esa complejidad queda encapsulada detrás de un método como confirmarCompra(). El cliente de la fachada no necesita conocer todos los objetos internos ni el orden exacto en que deben usarse.
-
-[screenshot-facade.png]
+[./images/facade-section.png](./images/facade-section.png)
