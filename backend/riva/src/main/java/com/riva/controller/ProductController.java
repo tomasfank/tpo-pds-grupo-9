@@ -1,5 +1,6 @@
 package com.riva.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
@@ -11,12 +12,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.riva.dto.CreateProductRequest;
+import com.riva.dto.ProductSearchCriteria;
 import com.riva.dto.ProductResponse;
 import com.riva.dto.UpdateProductRequest;
 import com.riva.model.product.Product;
+import com.riva.model.product.Size;
 import com.riva.service.ProductService;
 
 import jakarta.validation.Valid;
@@ -34,13 +38,21 @@ public class ProductController {
     }
 
     @GetMapping
-    public List<ProductResponse> listAll() {
-        return productService.findAllActive().stream().map(ProductResponse::from).toList();
+    public List<ProductResponse> listAll(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) Size size,
+            @RequestParam(required = false) String color,
+            @RequestParam(required = false) BigDecimal priceMin,
+            @RequestParam(required = false) BigDecimal priceMax
+    ) {
+        ProductSearchCriteria criteria = new ProductSearchCriteria(name, categoryId, size, color, priceMin, priceMax);
+        return productService.searchActive(criteria).stream().map(ProductResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     public ProductResponse get(@PathVariable String id) {
-        return ProductResponse.from(productService.requireProduct(id));
+        return ProductResponse.from(productService.requireActiveProduct(id));
     }
 
     @PostMapping

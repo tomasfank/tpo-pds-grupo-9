@@ -2,18 +2,17 @@ spring:
   application:
     name: riva-backend
 
-  # MongoDB: en Spring Boot 4 el prefix cambió de "spring.data.mongodb.*" a "spring.mongodb.*"
-  # (las keys viejas están deprecated y son ignoradas). En docker-compose se inyecta vía
-  # SPRING_MONGODB_URI / SPRING_MONGODB_DATABASE (relaxed binding).
-  # Para dev local sin Docker: exportar SPRING_MONGODB_URI antes de correr la app o sobreescribir aquí.
+  # Spring Boot 4 usa spring.mongodb.*. Estos defaults coinciden con docker-compose/.env.example
+  # para que el backend tambien pueda correr localmente contra Mongo en Docker.
+  mongodb:
+    uri: ${SPRING_MONGODB_URI:mongodb://${MONGO_USER:riva}:${MONGO_PASSWORD:rivapass}@localhost:27017/${MONGO_DB:rivadb}?authSource=admin}
+    database: ${SPRING_MONGODB_DATABASE:rivadb}
 
 spring.data.mongodb.auto-index-creation: true
 
 server:
   port: 8080
 
-# Configuración propia de la app. Hasta que se implemente el módulo de auth (CU-01 / CU-02)
-# el secret solo se carga, no se usa.
 app:
   jwt:
     secret: ${JWT_SECRET:changeme_in_production}
