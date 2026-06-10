@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import {
+  addCartItem,
+  clearCart,
+  getCart,
+  removeCartItem,
+  updateCartItem,
+} from './api/cart'
+import {
   getCatalogTree,
   getProduct,
   getProducts,
   getProductsByCategory,
 } from './api/products'
-import type { CategoryTreeNode, Product, ProductFilters, Size, ViewName } from './types'
+import type { Cart, CategoryTreeNode, Product, ProductFilters, Size, ViewName } from './types'
 
 const pesoFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -26,9 +33,13 @@ function App() {
   const [categories, setCategories] = useState<CategoryTreeNode[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [cart, setCart] = useState<Cart | null>(null)
   const [filters, setFilters] = useState<ProductFilters>({})
   const [isLoading, setIsLoading] = useState(true)
+  const [isCartLoading, setIsCartLoading] = useState(false)
   const [error, setError] = useState('')
+  const [cartMessage, setCartMessage] = useState('')
+  const [cartError, setCartError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -58,6 +69,36 @@ function App() {
     }
 
     loadInitialCatalog()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCart() {
+      try {
+        setIsCartLoading(true)
+        setCartError('')
+        const data = await getCart()
+
+        if (isMounted) {
+          setCart(data)
+        }
+      } catch {
+        if (isMounted) {
+          setCartError('No pudimos cargar el carrito.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsCartLoading(false)
+        }
+      }
+    }
+
+    loadCart()
 
     return () => {
       isMounted = false
@@ -154,10 +195,68 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  async function handleAddToCart(product: Product, variantId: string, cantidad: number) {
+    try {
+      setIsCartLoading(true)
+      setCartError('')
+      setCartMessage('')
+      const updatedCart = await addCartItem(product.id, variantId, cantidad)
+      setCart(updatedCart)
+      setCartMessage('Producto agregado al carrito.')
+    } catch {
+      setCartError('No pudimos agregar el producto al carrito.')
+    } finally {
+      setIsCartLoading(false)
+    }
+  }
+
+  async function handleUpdateCartItem(itemId: string, cantidad: number) {
+    try {
+      setIsCartLoading(true)
+      setCartError('')
+      setCartMessage('')
+      const updatedCart = await updateCartItem(itemId, cantidad)
+      setCart(updatedCart)
+    } catch {
+      setCartError('No pudimos actualizar la cantidad.')
+    } finally {
+      setIsCartLoading(false)
+    }
+  }
+
+  async function handleRemoveCartItem(itemId: string) {
+    try {
+      setIsCartLoading(true)
+      setCartError('')
+      setCartMessage('')
+      const updatedCart = await removeCartItem(itemId)
+      setCart(updatedCart)
+    } catch {
+      setCartError('No pudimos eliminar el item.')
+    } finally {
+      setIsCartLoading(false)
+    }
+  }
+
+  async function handleClearCart() {
+    try {
+      setIsCartLoading(true)
+      setCartError('')
+      setCartMessage('')
+      const updatedCart = await clearCart()
+      setCart(updatedCart)
+    } catch {
+      setCartError('No pudimos vaciar el carrito.')
+    } finally {
+      setIsCartLoading(false)
+    }
+  }
+
   const currentCategory = route.categoryId
     ? findCategory(categories, route.categoryId)
     : undefined
   const featuredProducts = useMemo(() => products.slice(0, 4), [products])
+  const cartItemsCount = cart?.items.reduce((total, item) => total + item.cantidad, 0) ?? 0
 
   return (
     <div className="store-shell">
@@ -180,6 +279,10 @@ function App() {
             </button>
           ))}
         </nav>
+
+        <button className="cart-link" type="button" onClick={() => navigate({ view: 'cart' })}>
+          Carrito <span>{cartItemsCount}</span>
+        </button>
       </header>
 
       <main>
@@ -216,7 +319,14 @@ function App() {
         )}
 
         {route.view === 'product' && selectedProduct && (
-          <ProductDetailView product={selectedProduct} />
+          <ProductDetailView
+            key={selectedProduct.id}
+            product={selectedProduct}
+            isCartLoading={isCartLoading}
+            cartMessage={cartMessage}
+            cartError={cartError}
+            onAddToCart={handleAddToCart}
+          />
         )}
 
         {route.view === 'product' && !selectedProduct && !isLoading && (
@@ -226,6 +336,18 @@ function App() {
             description="Volvi al inicio para explorar el catalogo activo."
             actionLabel="Ir al inicio"
             onAction={() => navigate({ view: 'home' })}
+          />
+        )}
+
+        {route.view === 'cart' && (
+          <CartView
+            cart={cart}
+            isLoading={isCartLoading}
+            error={cartError}
+            onQuantityChange={handleUpdateCartItem}
+            onRemoveItem={handleRemoveCartItem}
+            onClear={handleClearCart}
+            onContinueShopping={() => navigate({ view: 'home' })}
           />
         )}
       </main>
@@ -394,10 +516,30 @@ function CatalogFilters({ filters, onApply }: CatalogFiltersProps) {
 
 type ProductDetailViewProps = {
   product: Product
+  isCartLoading: boolean
+  cartMessage: string
+  cartError: string
+  onAddToCart: (product: Product, variantId: string, cantidad: number) => Promise<void>
 }
 
-function ProductDetailView({ product }: ProductDetailViewProps) {
+function ProductDetailView({
+  product,
+  isCartLoading,
+  cartMessage,
+  cartError,
+  onAddToCart,
+}: ProductDetailViewProps) {
   const hasStock = product.variants.some((variant) => variant.stock > 0)
+  const firstAvailableVariant = product.variants.find((variant) => variant.stock > 0)
+  const [selectedVariantId, setSelectedVariantId] = useState(firstAvailableVariant?.id ?? '')
+  const [cantidad, setCantidad] = useState(1)
+  const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId)
+  const maxQuantity = selectedVariant?.stock ?? 0
+
+  function updateCantidad(nextCantidad: number) {
+    const normalized = Number.isFinite(nextCantidad) ? nextCantidad : 1
+    setCantidad(Math.max(1, Math.min(normalized, Math.max(maxQuantity, 1))))
+  }
 
   return (
     <section className="product-detail">
@@ -410,20 +552,169 @@ function ProductDetailView({ product }: ProductDetailViewProps) {
         <p className="detail-price">{pesoFormatter.format(product.price)}</p>
         <p>{product.description}</p>
         <p>Material: {product.material}</p>
-        <div className="variant-list" aria-label="Variantes disponibles">
+        <div className="variant-list" aria-label="Seleccionar variante">
           {product.variants.map((variant) => (
-            <span
-              className={variant.stock > 0 ? 'variant-chip' : 'variant-chip is-empty'}
-              key={`${variant.size ?? 'unico'}-${variant.color ?? 'sin-color'}`}
+            <button
+              className={
+                variant.stock > 0 && variant.id === selectedVariantId
+                  ? 'variant-chip is-selected'
+                  : variant.stock > 0
+                    ? 'variant-chip'
+                    : 'variant-chip is-empty'
+              }
+              disabled={variant.stock === 0}
+              key={variant.id}
+              type="button"
+              onClick={() => {
+                setSelectedVariantId(variant.id)
+                setCantidad(1)
+              }}
             >
               {variant.size ?? 'Unico'} / {variant.color ?? 'Sin color'} / {variant.stock}
-            </span>
+            </button>
           ))}
         </div>
+        {hasStock && (
+          <div className="purchase-controls" aria-label="Agregar al carrito">
+            <label>
+              Cantidad
+              <input
+                min="1"
+                max={maxQuantity}
+                type="number"
+                value={cantidad}
+                onChange={(event) => updateCantidad(Number(event.target.value))}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!selectedVariantId || isCartLoading}
+              onClick={() => onAddToCart(product, selectedVariantId, cantidad)}
+            >
+              {isCartLoading ? 'Agregando...' : 'Agregar al carrito'}
+            </button>
+          </div>
+        )}
         <strong className={hasStock ? 'stock-label' : 'stock-label is-empty'}>
           {hasStock ? 'Con stock' : 'Sin stock'}
         </strong>
+        {cartMessage && <p className="status-text">{cartMessage}</p>}
+        {cartError && <p className="status-text is-error">{cartError}</p>}
       </div>
+    </section>
+  )
+}
+
+type CartViewProps = {
+  cart: Cart | null
+  isLoading: boolean
+  error: string
+  onQuantityChange: (itemId: string, cantidad: number) => Promise<void>
+  onRemoveItem: (itemId: string) => Promise<void>
+  onClear: () => Promise<void>
+  onContinueShopping: () => void
+}
+
+function CartView({
+  cart,
+  isLoading,
+  error,
+  onQuantityChange,
+  onRemoveItem,
+  onClear,
+  onContinueShopping,
+}: CartViewProps) {
+  const items = cart?.items ?? []
+
+  return (
+    <section className="cart-view">
+      <div className="view-heading">
+        <p className="eyebrow">Carrito</p>
+        <h1>Tu seleccion</h1>
+        <p>{items.length === 0 ? 'Todavia no hay items.' : `${items.length} items cargados.`}</p>
+      </div>
+
+      {error && <p className="status-text is-error">{error}</p>}
+      {isLoading && <p className="status-text">Actualizando carrito...</p>}
+
+      {items.length === 0 && !isLoading ? (
+        <EmptyState
+          eyebrow="Carrito vacio"
+          title="No agregaste productos"
+          description="Volvi al catalogo para elegir variantes con stock disponible."
+          actionLabel="Seguir comprando"
+          onAction={onContinueShopping}
+        />
+      ) : (
+        <div className="cart-layout">
+          <div className="cart-items">
+            {items.map((item) => (
+              <article className="cart-item" key={item.id}>
+                <div className="cart-item-image" aria-hidden="true">
+                  {item.productName.slice(0, 1)}
+                </div>
+                <div>
+                  <h2>{item.productName}</h2>
+                  <p>
+                    {item.size ?? 'Unico'} / {item.color ?? 'Sin color'} / Stock {item.stockDisponible}
+                  </p>
+                  <span>{pesoFormatter.format(item.precioUnitario)} c/u</span>
+                  <div className="cart-quantity">
+                    <button
+                      type="button"
+                      disabled={item.cantidad <= 1 || isLoading}
+                      onClick={() => onQuantityChange(item.id, item.cantidad - 1)}
+                    >
+                      -
+                    </button>
+                    <input
+                      min="1"
+                      max={item.stockDisponible}
+                      type="number"
+                      value={item.cantidad}
+                      onChange={(event) =>
+                        onQuantityChange(
+                          item.id,
+                          Math.max(1, Math.min(Number(event.target.value), item.stockDisponible)),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={item.cantidad >= item.stockDisponible || isLoading}
+                      onClick={() => onQuantityChange(item.id, item.cantidad + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div className="cart-item-actions">
+                  <strong>{pesoFormatter.format(item.subtotal)}</strong>
+                  <button type="button" disabled={isLoading} onClick={() => onRemoveItem(item.id)}>
+                    Eliminar
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <aside className="cart-summary" aria-label="Resumen del carrito">
+            <p>Total</p>
+            <strong>{pesoFormatter.format(cart?.total ?? 0)}</strong>
+            <button type="button" onClick={onContinueShopping}>
+              Seguir comprando
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={items.length === 0 || isLoading}
+              onClick={onClear}
+            >
+              Vaciar carrito
+            </button>
+          </aside>
+        </div>
+      )}
     </section>
   )
 }
