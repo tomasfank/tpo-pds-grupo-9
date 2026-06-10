@@ -1,6 +1,7 @@
 export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL'
 
 export type ProductVariant = {
+  id: string
   size: Size | null
   color: string | null
   stock: number
@@ -37,4 +38,24 @@ export type ProductFilters = {
   priceMax?: number
 }
 
-export type ViewName = 'home' | 'category' | 'product'
+export type CartItem = {
+  id: string
+  variantId: string
+  productId: string
+  productName: string
+  size: Size | null
+  color: string | null
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  stockDisponible: number
+}
+
+export type Cart = {
+  id: string | null
+  clienteId: string
+  items: CartItem[]
+  total: number
+}
+
+export type ViewName = 'home' | 'category' | 'product' | 'cart'
