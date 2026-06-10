@@ -15,6 +15,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-01 |
+| Estado de implementacion | PENDIENTE - No hay modelo de usuarios, registro, BCrypt, repositorio de usuarios ni pantalla de registro implementados. |
 | Nombre | Registrarse como Cliente |
 | Actor principal | Usuario no registrado |
 | Precondiciones | El usuario no posee cuenta en el sistema. El usuario accede a la plataforma desde la pantalla pública. |
@@ -31,6 +32,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-02 |
+| Estado de implementacion | PENDIENTE - No hay login de cliente, validacion de credenciales, JWT ni sesion real. El sistema usa `X-Cliente-Id` temporal para flujos de carrito/pedidos. |
 | Nombre | Iniciar Sesión como Cliente |
 | Actor principal | Cliente |
 | Precondiciones | El usuario posee una cuenta activa con rol Cliente (registrada mediante CU-01). El usuario no tiene una sesión activa. |
@@ -47,6 +49,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-03 |
+| Estado de implementacion | PENDIENTE - No hay login administrativo ni control de rol Administrador. Los endpoints admin estan abiertos con comentarios `TODO(auth)`. |
 | Nombre | Iniciar Sesión como Administrador |
 | Actor principal | Administrador |
 | Precondiciones | El usuario posee una cuenta activa con rol Administrador previamente provisionada en el sistema. El usuario no tiene una sesión activa. |
@@ -63,6 +66,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-04 |
+| Estado de implementacion | PENDIENTE - No hay sesion/token real para invalidar ni flujo de cierre de sesion. |
 | Nombre | Cerrar Sesión |
 | Actor principal | Cliente / Administrador |
 | Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
@@ -79,6 +83,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-05 |
+| Estado de implementacion | PENDIENTE - No hay recuperacion de contrasena, tokens de recuperacion ni envio de email. |
 | Nombre | Recuperar Contraseña |
 | Actor principal | Usuario sin sesión activa |
 | Precondiciones | El usuario posee una cuenta registrada con un email accesible. El usuario no tiene una sesión activa. |
@@ -95,6 +100,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-06 |
+| Estado de implementacion | PENDIENTE - No hay usuario autenticado ni cambio de contrasena implementado. |
 | Nombre | Cambiar Contraseña |
 | Actor principal | Cliente / Administrador |
 | Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
@@ -111,6 +117,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-07 |
+| Estado de implementacion | DONE - Backend expone arbol de categorias y productos por subarbol (`CatalogController`/`CatalogService`) y frontend navega categorias reales. |
 | Nombre | Navegar Catálogo por Categorías |
 | Actor principal | Cliente / Usuario no registrado |
 | Precondiciones | Existe al menos una categoría activa con productos visibles. |
@@ -127,6 +134,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-08 |
+| Estado de implementacion | DONE - Backend filtra productos activos por nombre, categoria, talle, color y rango de precio; frontend tiene formulario basico de filtros. |
 | Nombre | Buscar Productos por Filtros |
 | Actor principal | Cliente / Usuario no registrado |
 | Precondiciones | Existe al menos un producto activo en el catálogo. |
@@ -143,6 +151,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-09 |
+| Estado de implementacion | DONE - Backend expone detalle de producto activo con variantes/stock y frontend muestra ficha, variantes y estado sin stock. |
 | Nombre | Ver Detalle de Producto |
 | Actor principal | Cliente / Usuario no registrado |
 | Precondiciones | El producto existe y se encuentra activo. El usuario lo seleccionó desde CU-07 o CU-08. |
@@ -159,6 +168,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-10 |
+| Estado de implementacion | PARCIAL - Backend permite crear productos con variantes y validaciones basicas. Falta login/rol Administrador y falta panel administrativo en frontend. |
 | Nombre | Crear Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos una categoría donde ubicar el producto (CU-13). |
@@ -175,6 +185,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-11 |
+| Estado de implementacion | PARCIAL - Backend permite editar productos. Falta login/rol Administrador y falta UI administrativa. |
 | Nombre | Editar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto a editar existe en el sistema (creado previamente vía CU-10). |
@@ -191,6 +202,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-12 |
+| Estado de implementacion | PARCIAL - Backend permite desactivar productos. Falta login/rol Administrador, confirmacion en frontend y manejo completo de carritos afectados. |
 | Nombre | Desactivar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto existe y se encuentra activo. |
@@ -207,6 +219,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-13 |
+| Estado de implementacion | PARCIAL - Backend permite listar, crear, renombrar, mover, activar/desactivar categorias con validaciones de jerarquia. Falta login/rol Administrador y panel administrativo. |
 | Nombre | Gestionar Categorías y Subcategorías |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). |
@@ -223,6 +236,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-14 |
+| Estado de implementacion | DONE - Backend agrega variantes al carrito validando stock y acumulando cantidad; frontend permite seleccionar variante/cantidad desde detalle y agregar al carrito. Autenticacion real sigue pendiente y se usa `X-Cliente-Id` temporal. |
 | Nombre | Agregar Producto al Carrito |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente se encuentra en la ficha del producto (vía CU-09). El producto está activo y posee stock en al menos una variante. |
@@ -239,6 +253,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-15 |
+| Estado de implementacion | DONE - Backend modifica cantidades validando stock; frontend permite incrementar/decrementar o ingresar cantidad. Si cantidad queda en cero, la UI no deriva automaticamente a eliminar sino que mantiene minimo 1. |
 | Nombre | Modificar Cantidad en Carrito |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). |
@@ -255,6 +270,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-16 |
+| Estado de implementacion | DONE - Backend elimina items del carrito y recalcula total; frontend tiene accion de eliminar item. |
 | Nombre | Eliminar Producto del Carrito |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). |
@@ -271,6 +287,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-17 |
+| Estado de implementacion | DONE - Backend vacia el carrito y recalcula total; frontend tiene accion de vaciar carrito. La confirmacion explicita previa no esta implementada. |
 | Nombre | Vaciar Carrito |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem. |
@@ -287,6 +304,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-18 |
+| Estado de implementacion | DONE - Backend crea `Pedido` desde carrito, valida stock, congela items/precios e inicia en `EstadoPendiente`; frontend confirma compra desde carrito. No vacia carrito porque eso queda para pago/fachada. |
 | Nombre | Confirmar Compra |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El carrito contiene al menos un ítem (vía CU-14). Todos los ítems del carrito mantienen stock disponible. |
@@ -303,6 +321,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-19 |
+| Estado de implementacion | PARCIAL - Frontend muestra pago simulado cuando el pedido esta `Pendiente`. Backend solo tiene contrato minimo `MetodoPago`; no existen estrategias concretas ni asociacion persistida de metodo de pago. |
 | Nombre | Seleccionar Método de Pago |
 | Actor principal | Cliente |
 | Precondiciones | Existe un pedido en estado "Pendiente" asociado al cliente, creado mediante CU-18. |
@@ -319,6 +338,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-20 |
+| Estado de implementacion | PARCIAL - Frontend simula pago y avanza estado a `Pagado`. Backend tiene `Pedido.pagar()` y contrato `MetodoPago`, pero no hay Strategy completo, proveedor externo, descuento de stock, notificaciones ni vaciado de carrito post-pago. |
 | Nombre | Procesar Pago |
 | Actor principal | Cliente |
 | Actores secundarios | Sistema de Pagos (externo) |
@@ -336,6 +356,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-21 |
+| Estado de implementacion | DONE - Backend lista pedidos por cliente ordenados por fecha descendente y frontend muestra historial en vista `Pedidos`, usando `X-Cliente-Id` temporal. |
 | Nombre | Consultar Historial de Pedidos |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
@@ -352,6 +373,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-22 |
+| Estado de implementacion | PARCIAL - Backend permite consultar detalle y rechaza pedidos de otro cliente; frontend muestra detalle embebido en cada tarjeta de historial. Falta metodo de pago utilizado real porque Strategy no esta implementado. |
 | Nombre | Consultar Detalle de Pedido |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente seleccionó un pedido desde el historial (vía CU-21). El pedido pertenece al cliente. |
@@ -368,6 +390,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-23 |
+| Estado de implementacion | PARCIAL - Backend implementa State y endpoint para avanzar estados; frontend permite pago/envio simulado y entrega automatica. Falta restriccion real a Administrador y faltan notificaciones Observer. |
 | Nombre | Avanzar Estado de Pedido |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos un pedido en estado distinto de "Entregado". |
@@ -384,6 +407,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-24 |
+| Estado de implementacion | PENDIENTE - Solo existe contrato minimo `CanalNotificacion`; no hay preferencias, canales concretos, suscripcion dinamica ni UI de configuracion. |
 | Nombre | Configurar Canales de Notificación |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |

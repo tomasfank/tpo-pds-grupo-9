@@ -13,7 +13,22 @@ import {
   getProducts,
   getProductsByCategory,
 } from './api/products'
-import type { Cart, CategoryTreeNode, Product, ProductFilters, Size, ViewName } from './types'
+import {
+  advanceOrder,
+  createOrder,
+  getOrders,
+  updateOrderShippingAddress,
+} from './api/orders'
+import type {
+  Cart,
+  CategoryTreeNode,
+  Order,
+  Product,
+  ProductFilters,
+  ShippingAddress,
+  Size,
+  ViewName,
+} from './types'
 
 const pesoFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -34,12 +49,16 @@ function App() {
   const [products, setProducts] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [cart, setCart] = useState<Cart | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
   const [filters, setFilters] = useState<ProductFilters>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isCartLoading, setIsCartLoading] = useState(false)
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false)
   const [error, setError] = useState('')
   const [cartMessage, setCartMessage] = useState('')
   const [cartError, setCartError] = useState('')
+  const [ordersError, setOrdersError] = useState('')
+  const [ordersMessage, setOrdersMessage] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -252,6 +271,75 @@ function App() {
     }
   }
 
+  async function loadOrders() {
+    try {
+      setIsOrdersLoading(true)
+      setOrdersError('')
+      const data = await getOrders()
+      setOrders(data)
+    } catch {
+      setOrdersError('No pudimos cargar los pedidos.')
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }
+
+  async function handleCreateOrder() {
+    try {
+      setIsCartLoading(true)
+      setOrdersError('')
+      setOrdersMessage('')
+      const pedido = await createOrder()
+      setOrders((current) => [pedido, ...current.filter((item) => item.id !== pedido.id)])
+      setOrdersMessage('Pedido creado en estado Pendiente.')
+      setRoute({ view: 'orders' })
+    } catch {
+      setOrdersError('No pudimos confirmar la compra. Revisa que el carrito tenga stock disponible.')
+    } finally {
+      setIsCartLoading(false)
+    }
+  }
+
+  async function handleAdvanceOrder(orderId: string) {
+    try {
+      setIsOrdersLoading(true)
+      setOrdersError('')
+      setOrdersMessage('')
+      const updated = await advanceOrder(orderId)
+      setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)))
+      setOrdersMessage(`Pedido actualizado a ${updated.estado}.`)
+    } catch {
+      setOrdersError('No pudimos avanzar el estado del pedido.')
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }
+
+  async function handleSaveShippingAndShip(orderId: string, address: ShippingAddress) {
+    try {
+      setIsOrdersLoading(true)
+      setOrdersError('')
+      setOrdersMessage('')
+      const withAddress = await updateOrderShippingAddress(orderId, address)
+      const shipped = await advanceOrder(orderId)
+      const updated = {
+        ...shipped,
+        direccionEnvio: withAddress.direccionEnvio,
+      }
+      setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)))
+      setOrdersMessage('Direccion cargada. Pedido enviado.')
+    } catch {
+      setOrdersError('No pudimos guardar la direccion de envio.')
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }
+
+  function navigateToOrders() {
+    navigate({ view: 'orders' })
+    void loadOrders()
+  }
+
   const currentCategory = route.categoryId
     ? findCategory(categories, route.categoryId)
     : undefined
@@ -282,6 +370,9 @@ function App() {
 
         <button className="cart-link" type="button" onClick={() => navigate({ view: 'cart' })}>
           Carrito <span>{cartItemsCount}</span>
+        </button>
+        <button className="cart-link" type="button" onClick={navigateToOrders}>
+          Pedidos
         </button>
       </header>
 
@@ -347,6 +438,20 @@ function App() {
             onQuantityChange={handleUpdateCartItem}
             onRemoveItem={handleRemoveCartItem}
             onClear={handleClearCart}
+            onCreateOrder={handleCreateOrder}
+            onContinueShopping={() => navigate({ view: 'home' })}
+          />
+        )}
+
+        {route.view === 'orders' && (
+          <OrdersView
+            orders={orders}
+            isLoading={isOrdersLoading}
+            error={ordersError}
+            message={ordersMessage}
+            onRefresh={loadOrders}
+            onAdvance={handleAdvanceOrder}
+            onSaveShippingAndShip={handleSaveShippingAndShip}
             onContinueShopping={() => navigate({ view: 'home' })}
           />
         )}
@@ -612,6 +717,7 @@ type CartViewProps = {
   onQuantityChange: (itemId: string, cantidad: number) => Promise<void>
   onRemoveItem: (itemId: string) => Promise<void>
   onClear: () => Promise<void>
+  onCreateOrder: () => Promise<void>
   onContinueShopping: () => void
 }
 
@@ -622,6 +728,7 @@ function CartView({
   onQuantityChange,
   onRemoveItem,
   onClear,
+  onCreateOrder,
   onContinueShopping,
 }: CartViewProps) {
   const items = cart?.items ?? []
@@ -705,6 +812,13 @@ function CartView({
               Seguir comprando
             </button>
             <button
+              type="button"
+              disabled={items.length === 0 || isLoading}
+              onClick={onCreateOrder}
+            >
+              Confirmar compra
+            </button>
+            <button
               className="ghost-button"
               type="button"
               disabled={items.length === 0 || isLoading}
@@ -716,6 +830,267 @@ function CartView({
         </div>
       )}
     </section>
+  )
+}
+
+type OrdersViewProps = {
+  orders: Order[]
+  isLoading: boolean
+  error: string
+  message: string
+  onRefresh: () => Promise<void>
+  onAdvance: (orderId: string) => Promise<void>
+  onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
+  onContinueShopping: () => void
+}
+
+function OrdersView({
+  orders,
+  isLoading,
+  error,
+  message,
+  onRefresh,
+  onAdvance,
+  onSaveShippingAndShip,
+  onContinueShopping,
+}: OrdersViewProps) {
+  return (
+    <section className="orders-view">
+      <div className="view-heading">
+        <p className="eyebrow">Pedidos</p>
+        <h1>Historial de pedidos</h1>
+        <p>Estados gestionados por el patron State del backend.</p>
+      </div>
+
+      <div className="orders-toolbar">
+        <button type="button" disabled={isLoading} onClick={onRefresh}>
+          Actualizar
+        </button>
+        <button className="ghost-button" type="button" onClick={onContinueShopping}>
+          Seguir comprando
+        </button>
+      </div>
+
+      {message && <p className="status-text">{message}</p>}
+      {error && <p className="status-text is-error">{error}</p>}
+      {isLoading && <p className="status-text">Actualizando pedidos...</p>}
+
+      {orders.length === 0 && !isLoading ? (
+        <EmptyState
+          eyebrow="Sin pedidos"
+          title="Todavia no confirmaste compras"
+          description="Crea un pedido desde el carrito para ver el ciclo Pendiente, Pagado, Enviado y Entregado."
+          actionLabel="Ir al catalogo"
+          onAction={onContinueShopping}
+        />
+      ) : (
+        <div className="orders-list">
+          {orders.map((order) => (
+            <OrderCard
+              key={order.id ?? `${order.fecha}-${order.total}`}
+              order={order}
+              isLoading={isLoading}
+              onAdvance={onAdvance}
+              onSaveShippingAndShip={onSaveShippingAndShip}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+type OrderCardProps = {
+  order: Order
+  isLoading: boolean
+  onAdvance: (orderId: string) => Promise<void>
+  onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
+}
+
+function OrderCard({
+  order,
+  isLoading,
+  onAdvance,
+  onSaveShippingAndShip,
+}: OrderCardProps) {
+  const [paymentDraft, setPaymentDraft] = useState({
+    titular: '',
+    numero: '',
+    vencimiento: '',
+  })
+  const [shippingDraft, setShippingDraft] = useState<ShippingAddress>({
+    calle: order.direccionEnvio?.calle ?? '',
+    numero: order.direccionEnvio?.numero ?? '',
+    ciudad: order.direccionEnvio?.ciudad ?? '',
+    provincia: order.direccionEnvio?.provincia ?? '',
+    codigoPostal: order.direccionEnvio?.codigoPostal ?? '',
+  })
+  const [deliverySeconds, setDeliverySeconds] = useState(60)
+
+  useEffect(() => {
+    if (order.estado !== 'Enviado' || !order.id) {
+      return
+    }
+
+    const orderId = order.id
+    const intervalId = window.setInterval(() => {
+      setDeliverySeconds((seconds) => Math.max(seconds - 1, 0))
+    }, 1000)
+    const timeoutId = window.setTimeout(() => {
+      void onAdvance(orderId)
+    }, 60000)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.clearTimeout(timeoutId)
+    }
+  }, [order.estado, order.id, onAdvance])
+
+  const canPay =
+    paymentDraft.titular.trim() !== '' &&
+    paymentDraft.numero.trim().length >= 8 &&
+    paymentDraft.vencimiento.trim() !== ''
+
+  const canShip =
+    shippingDraft.calle.trim() !== '' &&
+    shippingDraft.numero.trim() !== '' &&
+    shippingDraft.ciudad.trim() !== '' &&
+    shippingDraft.provincia.trim() !== '' &&
+    shippingDraft.codigoPostal.trim() !== ''
+
+  return (
+    <article className="order-card">
+      <div className="order-card-header">
+        <div>
+          <p className="eyebrow">Estado {order.estado}</p>
+          <h2>Pedido {order.id?.slice(0, 8) ?? 'nuevo'}</h2>
+          <span>{new Date(order.fecha).toLocaleString('es-AR')}</span>
+        </div>
+        <strong>{pesoFormatter.format(order.total)}</strong>
+      </div>
+
+      <div className="order-items">
+        {order.items.map((item) => (
+          <div className="order-item" key={item.id}>
+            <span>{item.productoNombre}</span>
+            <small>
+              {item.talla ?? 'Unico'} / {item.color ?? 'Sin color'} x {item.cantidad}
+            </small>
+            <strong>{pesoFormatter.format(item.subtotal)}</strong>
+          </div>
+        ))}
+      </div>
+
+      <div className="order-history">
+        {order.historialEstados.map((transition) => (
+          <span key={`${order.id}-${transition.estado}-${transition.fecha}`}>
+            {transition.estado}
+          </span>
+        ))}
+      </div>
+
+      {order.direccionEnvio && (
+        <p className="order-address">
+          Envio: {order.direccionEnvio.calle} {order.direccionEnvio.numero},{' '}
+          {order.direccionEnvio.ciudad}
+        </p>
+      )}
+
+      {order.estado === 'Pendiente' && (
+        <form
+          className="order-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (order.id && canPay) {
+              void onAdvance(order.id)
+            }
+          }}
+        >
+          <p>Pago simulado</p>
+          <input
+            placeholder="Titular"
+            value={paymentDraft.titular}
+            onChange={(event) => setPaymentDraft({ ...paymentDraft, titular: event.target.value })}
+          />
+          <input
+            placeholder="Numero de tarjeta"
+            value={paymentDraft.numero}
+            onChange={(event) => setPaymentDraft({ ...paymentDraft, numero: event.target.value })}
+          />
+          <input
+            placeholder="Vencimiento"
+            value={paymentDraft.vencimiento}
+            onChange={(event) =>
+              setPaymentDraft({ ...paymentDraft, vencimiento: event.target.value })
+            }
+          />
+          <button type="submit" disabled={!order.id || !canPay || isLoading}>
+            Confirmar pago simulado
+          </button>
+        </form>
+      )}
+
+      {order.estado === 'Pagado' && (
+        <form
+          className="order-form shipping-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (order.id && canShip) {
+              void onSaveShippingAndShip(order.id, shippingDraft)
+            }
+          }}
+        >
+          <p>Direccion de envio</p>
+          <input
+            placeholder="Calle"
+            value={shippingDraft.calle}
+            onChange={(event) => setShippingDraft({ ...shippingDraft, calle: event.target.value })}
+          />
+          <input
+            placeholder="Numero"
+            value={shippingDraft.numero}
+            onChange={(event) => setShippingDraft({ ...shippingDraft, numero: event.target.value })}
+          />
+          <input
+            placeholder="Ciudad"
+            value={shippingDraft.ciudad}
+            onChange={(event) => setShippingDraft({ ...shippingDraft, ciudad: event.target.value })}
+          />
+          <input
+            placeholder="Provincia"
+            value={shippingDraft.provincia}
+            onChange={(event) =>
+              setShippingDraft({ ...shippingDraft, provincia: event.target.value })
+            }
+          />
+          <input
+            placeholder="Codigo postal"
+            value={shippingDraft.codigoPostal}
+            onChange={(event) =>
+              setShippingDraft({ ...shippingDraft, codigoPostal: event.target.value })
+            }
+          />
+          <button type="submit" disabled={!order.id || !canShip || isLoading}>
+            Guardar direccion y enviar
+          </button>
+        </form>
+      )}
+
+      {order.estado === 'Enviado' && (
+        <div className="delivery-simulation">
+          <p>Pedido en camino</p>
+          <strong>{deliverySeconds}s</strong>
+          <span>La entrega se confirma automaticamente al terminar la simulacion.</span>
+        </div>
+      )}
+
+      {order.estado === 'Entregado' && (
+        <div className="delivery-simulation is-complete">
+          <p>Pedido entregado</p>
+          <span>El ciclo State finalizo. No hay acciones pendientes.</span>
+        </div>
+      )}
+    </article>
   )
 }
 

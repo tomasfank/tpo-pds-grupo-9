@@ -58,4 +58,40 @@ export type Cart = {
   total: number
 }
 
-export type ViewName = 'home' | 'category' | 'product' | 'cart'
+export type OrderItem = {
+  id: string
+  varianteId: string
+  productoId: string
+  productoNombre: string
+  talla: Size | null
+  color: string | null
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+}
+
+export type OrderTransition = {
+  fecha: string
+  estado: string
+}
+
+export type ShippingAddress = {
+  calle: string
+  numero: string
+  ciudad: string
+  provincia: string
+  codigoPostal: string
+}
+
+export type Order = {
+  id: string | null
+  clienteId: string
+  fecha: string
+  total: number
+  estado: string
+  items: OrderItem[]
+  historialEstados: OrderTransition[]
+  direccionEnvio: ShippingAddress | null
+}
+
+export type ViewName = 'home' | 'category' | 'product' | 'cart' | 'orders'

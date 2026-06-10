@@ -1,0 +1,117 @@
+package com.riva.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import com.riva.dto.DireccionEnvioRequest;
+import com.riva.dto.PedidoResponse;
+import com.riva.model.pedido.DireccionEnvio;
+import com.riva.model.pedido.ItemPedido;
+import com.riva.model.pedido.Pedido;
+import com.riva.model.product.ProductVariant;
+import com.riva.model.product.Size;
+import com.riva.service.PedidoService;
+
+class PedidoControllerTest {
+
+    private final PedidoService pedidoService = mock(PedidoService.class);
+    private final PedidoController controller = new PedidoController(pedidoService);
+
+    @Test
+    void crearCreaPedidoDesdeCarritoDelClienteYDevuelveEstadoPendiente() {
+        Pedido pedido = pedido();
+        when(pedidoService.crearDesdeCarrito("cliente-1", null)).thenReturn(pedido);
+
+        PedidoResponse response = controller.crear("cliente-1", null);
+
+        assertThat(response.estado()).isEqualTo("Pendiente");
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.historialEstados()).extracting("estado").containsExactly("Pendiente");
+    }
+
+    @Test
+    void listarDevuelvePedidosDelCliente() {
+        when(pedidoService.listarDelCliente("cliente-1")).thenReturn(List.of(pedido()));
+
+        List<PedidoResponse> response = controller.listar("cliente-1");
+
+        verify(pedidoService).listarDelCliente("cliente-1");
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().clienteId()).isEqualTo("cliente-1");
+    }
+
+    @Test
+    void detalleDevuelvePedidoDelCliente() {
+        when(pedidoService.obtenerDetalle("cliente-1", "pedido-1")).thenReturn(pedido());
+
+        PedidoResponse response = controller.detalle("cliente-1", "pedido-1");
+
+        verify(pedidoService).obtenerDetalle("cliente-1", "pedido-1");
+        assertThat(response.estado()).isEqualTo("Pendiente");
+    }
+
+    @Test
+    void avanzarDelegaEnServicioYDevuelveEstadoActualizado() {
+        Pedido pedido = pedido();
+        pedido.avanzarEstado();
+        when(pedidoService.avanzarEstado("pedido-1")).thenReturn(pedido);
+
+        PedidoResponse response = controller.avanzar("pedido-1");
+
+        verify(pedidoService).avanzarEstado("pedido-1");
+        assertThat(response.estado()).isEqualTo("Pagado");
+    }
+
+    @Test
+    void actualizarDireccionDelegaEnServicioYDevuelvePedidoConEnvio() {
+        Pedido pedido = pedido();
+        DireccionEnvioRequest request = new DireccionEnvioRequest(
+                "Av. Corrientes",
+                "1234",
+                "CABA",
+                "Buenos Aires",
+                "C1043"
+        );
+        when(pedidoService.actualizarDireccionEnvio(eq("cliente-1"), eq("pedido-1"), any(DireccionEnvio.class)))
+                .thenReturn(pedidoConDireccion());
+
+        PedidoResponse response = controller.actualizarDireccion("cliente-1", "pedido-1", request);
+
+        assertThat(response.direccionEnvio().calle()).isEqualTo("Av. Corrientes");
+        assertThat(response.direccionEnvio().codigoPostal()).isEqualTo("C1043");
+    }
+
+    private static Pedido pedido() {
+        return new Pedido("cliente-1", List.of(itemPedido()), null);
+    }
+
+    private static Pedido pedidoConDireccion() {
+        return new Pedido(
+                "cliente-1",
+                List.of(itemPedido()),
+                new DireccionEnvio("Av. Corrientes", "1234", "CABA", "Buenos Aires", "C1043")
+        );
+    }
+
+    private static ItemPedido itemPedido() {
+        ProductVariant variante = new ProductVariant(
+                "var-1",
+                Size.M,
+                "Negro",
+                4,
+                BigDecimal.valueOf(100),
+                "prod-1",
+                "Remera"
+        );
+        return ItemPedido.desdeVariante(variante, 2);
+    }
+}
