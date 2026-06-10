@@ -77,6 +77,14 @@ La carpeta `docs/` concentra los archivos que dan contexto al proyecto a nivel d
 - `docs/RIVA.md` — análisis funcional completo elaborado por el grupo: actores, requerimientos funcionales (RF-01 a RF-26), requerimientos no funcionales (RNF-01 a RNF-05) y casos de uso detallados (CU-01 a CU-24)
 - `docs/CONSIGNA.md` — enunciado original de la cátedra con los requisitos de diseño, patrones exigidos, entregables y criterios de evaluación
 
+## Fidelidad al UML y patrones
+
+Cuando una funcionalidad, clase, relacion u operacion este representada en los diagramas UML del proyecto, el codigo debe ser lo mas fiel posible a ese diseno: nombres conceptuales, responsabilidades, relaciones y metodos esperados deben poder reconocerse directamente al comparar UML y codigo.
+
+Cuando una funcionalidad implemente un patron de diseno especificado para el proyecto, la implementacion debe respetar la estructura canonica del patron y el diagrama UML asociado. No reemplazar la estructura del patron por atajos tecnicos aunque funcionen, salvo que se mantenga visible y defendible el patron en el modelo.
+
+Si una funcionalidad no esta modelada en el UML, por ejemplo detalles tecnicos de login, seguridad, infraestructura o integraciones no diagramadas, no es obligatorio copiar una estructura inexistente. En esos casos se debe disenar con criterio tecnico, manteniendo coherencia con el dominio y sin contradecir los diagramas existentes.
+
 ## Convenciones generales
 
 - No hacer push directo a `main`. Siempre rama + PR.

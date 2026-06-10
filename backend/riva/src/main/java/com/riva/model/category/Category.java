@@ -9,20 +9,21 @@ import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.riva.model.product.Product;
 import com.riva.pattern.composite.CatalogComponent;
 
 /**
  * Patrón Composite — Composite.
  *
  * Category puede contener otras Category o Product (hojas) — sus hijos son CatalogComponent.
- * countActiveProducts() recursa sobre los hijos y suma; eso es lo que justifica el Composite
+ * obtenerProductos() recursa sobre los hijos y agrega sus productos; eso es lo que justifica el Composite
  * acá vs un simple "Category con List&lt;Product&gt;": el cliente trata uniformemente nodos
  * intermedios y hojas.
  *
  * Persistencia: solo parentId + ancestorIds se guardan en Mongo. La lista de children es
  * @Transient y la rehidrata CategoryService cuando arma el árbol en memoria (combinando
  * categorías + productos del subárbol). El acceso desde fuera es de solo lectura para evitar
- * que se mute la estructura por accidente; el armado se hace vía addChild() dentro del servicio.
+ * que se mute la estructura por accidente; el armado se hace via agregar() dentro del servicio.
  *
  * ancestorIds: lista ordenada raíz → padre (no incluye al propio nodo). Permite:
  *   - Detectar ciclos en O(1) al reubicar (si target.id ∈ subjectAncestorIds → ciclo).
@@ -73,8 +74,12 @@ public class Category implements CatalogComponent {
         this.active = true;
     }
 
-    public void addChild(CatalogComponent component) {
+    public void agregar(CatalogComponent component) {
         children.add(component);
+    }
+
+    public void quitar(CatalogComponent component) {
+        children.remove(component);
     }
 
     public List<CatalogComponent> getChildren() {
@@ -102,16 +107,18 @@ public class Category implements CatalogComponent {
     }
 
     /**
-     * Suma recursiva de productos activos en el subárbol. Es el caso canónico del Composite:
-     * el cliente invoca esta operación sobre cualquier nodo y no necesita saber si es hoja
-     * o compuesto.
+     * Obtiene recursivamente los productos activos del subarbol. Es el caso canonico del
+     * Composite: el cliente invoca esta operacion sobre cualquier nodo y no necesita saber si
+     * es hoja o compuesto.
      */
     @Override
-    public int countActiveProducts() {
+    public List<Product> obtenerProductos() {
         if (!active) {
-            return 0;
+            return List.of();
         }
-        return children.stream().mapToInt(CatalogComponent::countActiveProducts).sum();
+        return children.stream()
+                .flatMap(child -> child.obtenerProductos().stream())
+                .toList();
     }
 
     public String getParentId() {

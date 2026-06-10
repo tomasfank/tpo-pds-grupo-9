@@ -14,8 +14,8 @@ import com.riva.pattern.composite.CatalogComponent;
 /**
  * Patrón Composite — Leaf.
  *
- * Product es la hoja del árbol del catálogo. countActiveProducts() devuelve 1 si el producto
- * está activo y 0 si no — no hay recursión porque no tiene hijos. La pertenencia a una categoría
+ * Product es la hoja del árbol del catálogo. obtenerProductos() devuelve este producto si esta
+ * activo o una lista vacia si no; no hay recursion porque no tiene hijos. La pertenencia a una categoría
  * se modela con categoryId (única) + categoryAncestorIds (lista de ancestros, denormalizada para
  * permitir queries de "todos los productos bajo la categoría X" sin recorrer recursivamente).
  *
@@ -107,8 +107,8 @@ public class Product implements CatalogComponent {
     }
 
     @Override
-    public int countActiveProducts() {
-        return active ? 1 : 0;
+    public List<Product> obtenerProductos() {
+        return active ? List.of(this) : List.of();
     }
 
     public String getDescription() {
