@@ -17,9 +17,10 @@ import com.riva.pattern.payment.ResultadoPago;
 import com.riva.pattern.state.EstadoPedido;
 import com.riva.pattern.state.EstadoPedidoFactory;
 import com.riva.pattern.state.EstadoPendiente;
+import com.riva.pattern.notification.SujetoObservable;
 
 @Document(collection = "pedidos")
-public class Pedido {
+public class Pedido implements SujetoObservable {
 
     @Id
     private String id;
@@ -67,6 +68,7 @@ public class Pedido {
     public void avanzarEstado() {
         estadoActual().avanzar(this);
         registrarEstadoActual();
+        notificar();
     }
 
     public ResultadoPago pagar() {
@@ -93,6 +95,7 @@ public class Pedido {
         this.metodoPagoNombre = metodoPagoNombre;
     }
 
+    @Override
     public void suscribir(CanalNotificacion canal) {
         if (canal == null) {
             throw new IllegalArgumentException("canal es obligatorio");
@@ -100,10 +103,12 @@ public class Pedido {
         observadores.add(canal);
     }
 
+    @Override
     public void desuscribir(CanalNotificacion canal) {
         observadores.remove(canal);
     }
 
+    @Override
     public void notificar() {
         observadores.forEach(canal -> canal.actualizar(this));
     }
