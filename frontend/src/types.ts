@@ -89,9 +89,30 @@ export type Order = {
   fecha: string
   total: number
   estado: string
+  metodoPagoNombre: string | null
   items: OrderItem[]
   historialEstados: OrderTransition[]
   direccionEnvio: ShippingAddress | null
 }
 
 export type ViewName = 'home' | 'category' | 'product' | 'cart' | 'orders'
+
+export type PaymentMethod = 'TARJETA' | 'PAYPAL' | 'TRANSFERENCIA'
+
+export type PaymentRequest = {
+  metodo: PaymentMethod
+  numeroTarjeta?: string
+  titular?: string
+  vencimiento?: string
+  cvv?: string
+  emailCuenta?: string
+  cbu?: string
+  alias?: string
+  banco?: string
+}
+
+export type PaymentResponse = {
+  exito: boolean
+  mensaje: string
+  pedido: Order
+}

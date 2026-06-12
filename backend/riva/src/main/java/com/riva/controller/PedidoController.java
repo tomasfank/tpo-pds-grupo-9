@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.riva.dto.CreatePedidoRequest;
 import com.riva.dto.DireccionEnvioRequest;
 import com.riva.dto.PedidoResponse;
+import com.riva.dto.ProcesarPagoRequest;
+import com.riva.dto.ProcesarPagoResponse;
 import com.riva.model.pedido.Pedido;
 import com.riva.service.PedidoService;
 
@@ -62,6 +64,15 @@ public class PedidoController {
     public PedidoResponse avanzar(@PathVariable String id) {
         // Restriccion pendiente: cuando exista CU-03 + JWT, limitar a rol Administrador.
         return PedidoResponse.from(pedidoService.avanzarEstado(id));
+    }
+
+    @PostMapping("/{id}/payment")
+    public ProcesarPagoResponse procesarPago(
+            @RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId,
+            @PathVariable String id,
+            @RequestBody ProcesarPagoRequest request
+    ) {
+        return pedidoService.procesarPago(clienteId, id, request);
     }
 
     @PatchMapping("/{id}/shipping-address")

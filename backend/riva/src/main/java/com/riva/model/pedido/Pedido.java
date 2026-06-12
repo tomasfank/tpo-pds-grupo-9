@@ -33,6 +33,7 @@ public class Pedido {
     private List<TransicionEstado> historialEstados = new ArrayList<>();
     private DireccionEnvio direccionEnvio;
     private String estadoNombre;
+    private String metodoPagoNombre;
 
     @Transient
     private EstadoPedido estado;
@@ -83,6 +84,13 @@ public class Pedido {
             throw new IllegalArgumentException("metodoPago es obligatorio");
         }
         this.metodoPago = metodoPago;
+    }
+
+    public void registrarMetodoPago(String metodoPagoNombre) {
+        if (metodoPagoNombre == null || metodoPagoNombre.isBlank()) {
+            throw new IllegalArgumentException("metodoPagoNombre es obligatorio");
+        }
+        this.metodoPagoNombre = metodoPagoNombre;
     }
 
     public void suscribir(CanalNotificacion canal) {
@@ -178,5 +186,9 @@ public class Pedido {
 
     public String getEstadoNombre() {
         return estadoNombre;
+    }
+
+    public String getMetodoPagoNombre() {
+        return metodoPagoNombre;
     }
 }

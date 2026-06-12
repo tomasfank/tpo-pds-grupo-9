@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Order, ShippingAddress } from '../types'
+import type { Order, PaymentRequest, PaymentResponse, ShippingAddress } from '../types'
 
 const apiUrl =
   import.meta.env.VITE_API_URL ??
@@ -28,6 +28,14 @@ export async function getOrders() {
 export async function advanceOrder(orderId: string) {
   const { data } = await rivaApi.post<Order>(
     `/orders/${encodeURIComponent(orderId)}/advance`,
+  )
+  return data
+}
+
+export async function processOrderPayment(orderId: string, payment: PaymentRequest) {
+  const { data } = await rivaApi.post<PaymentResponse>(
+    `/orders/${encodeURIComponent(orderId)}/payment`,
+    payment,
   )
   return data
 }

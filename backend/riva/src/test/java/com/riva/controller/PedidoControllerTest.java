@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 
 import com.riva.dto.DireccionEnvioRequest;
 import com.riva.dto.PedidoResponse;
+import com.riva.dto.ProcesarPagoRequest;
+import com.riva.dto.ProcesarPagoResponse;
 import com.riva.model.pedido.DireccionEnvio;
 import com.riva.model.pedido.ItemPedido;
 import com.riva.model.pedido.Pedido;
@@ -88,6 +90,33 @@ class PedidoControllerTest {
 
         assertThat(response.direccionEnvio().calle()).isEqualTo("Av. Corrientes");
         assertThat(response.direccionEnvio().codigoPostal()).isEqualTo("C1043");
+    }
+
+    @Test
+    void procesarPagoDelegaEnServicioYDevuelveResultadoConPedidoPagado() {
+        Pedido pedido = pedido();
+        pedido.registrarMetodoPago("Tarjeta");
+        pedido.avanzarEstado();
+        ProcesarPagoRequest request = new ProcesarPagoRequest(
+                "TARJETA",
+                "4111111111111111",
+                "Guido Morabito",
+                "12/29",
+                "123",
+                null,
+                null,
+                null,
+                null
+        );
+        when(pedidoService.procesarPago("cliente-1", "pedido-1", request))
+                .thenReturn(new ProcesarPagoResponse(true, "Pago aprobado", PedidoResponse.from(pedido)));
+
+        ProcesarPagoResponse response = controller.procesarPago("cliente-1", "pedido-1", request);
+
+        verify(pedidoService).procesarPago("cliente-1", "pedido-1", request);
+        assertThat(response.exito()).isTrue();
+        assertThat(response.pedido().estado()).isEqualTo("Pagado");
+        assertThat(response.pedido().metodoPagoNombre()).isEqualTo("Tarjeta");
     }
 
     private static Pedido pedido() {

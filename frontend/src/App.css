@@ -729,13 +729,52 @@ h3 {
   font-weight: 850;
 }
 
-.order-form input {
+.order-form input,
+.order-form select {
   min-height: 42px;
   border: 1px solid var(--line);
   padding: 9px 11px;
   color: var(--ink);
   background: var(--white);
   font: inherit;
+}
+
+.payment-instructions,
+.bank-transfer-details,
+.payment-file {
+  min-height: 42px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.payment-instructions {
+  grid-template-columns: minmax(180px, 1fr) auto;
+  grid-column: span 3;
+  align-items: center;
+}
+
+.payment-instructions span,
+.bank-transfer-details span,
+.payment-file {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.bank-transfer-details {
+  grid-column: span 2;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.payment-file {
+  color: var(--ink);
+}
+
+.payment-file input {
+  padding: 8px;
 }
 
 .delivery-simulation {
@@ -819,8 +858,15 @@ h3 {
   .order-card-header,
   .order-item,
   .order-form,
-  .order-form.shipping-form {
+  .order-form.shipping-form,
+  .payment-instructions,
+  .bank-transfer-details {
     grid-template-columns: 1fr;
+  }
+
+  .payment-instructions,
+  .bank-transfer-details {
+    grid-column: auto;
   }
 
   .product-grid {
