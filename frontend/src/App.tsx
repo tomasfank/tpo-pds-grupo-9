@@ -17,12 +17,14 @@ import {
   advanceOrder,
   createOrder,
   getOrders,
+  processOrderPayment,
   updateOrderShippingAddress,
 } from './api/orders'
 import type {
   Cart,
   CategoryTreeNode,
   Order,
+  PaymentRequest,
   Product,
   ProductFilters,
   ShippingAddress,
@@ -36,6 +38,12 @@ const pesoFormatter = new Intl.NumberFormat('es-AR', {
 })
 
 const sizes: Size[] = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+
+const rivaTransferAccount = {
+  cbu: '0000003100010000000001',
+  alias: 'riva.shop.pagos',
+  banco: 'Banco Demo RIVA',
+}
 
 type RouteState = {
   view: ViewName
@@ -315,6 +323,25 @@ function App() {
     }
   }
 
+  async function handleProcessPayment(orderId: string, payment: PaymentRequest) {
+    try {
+      setIsOrdersLoading(true)
+      setOrdersError('')
+      setOrdersMessage('')
+      const result = await processOrderPayment(orderId, payment)
+      setOrders((current) => current.map((order) => (order.id === result.pedido.id ? result.pedido : order)))
+      setOrdersMessage(result.mensaje)
+      if (result.exito) {
+        const updatedCart = await getCart()
+        setCart(updatedCart)
+      }
+    } catch {
+      setOrdersError('No pudimos procesar el pago.')
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }
+
   async function handleSaveShippingAndShip(orderId: string, address: ShippingAddress) {
     try {
       setIsOrdersLoading(true)
@@ -451,6 +478,7 @@ function App() {
             message={ordersMessage}
             onRefresh={loadOrders}
             onAdvance={handleAdvanceOrder}
+            onProcessPayment={handleProcessPayment}
             onSaveShippingAndShip={handleSaveShippingAndShip}
             onContinueShopping={() => navigate({ view: 'home' })}
           />
@@ -840,6 +868,7 @@ type OrdersViewProps = {
   message: string
   onRefresh: () => Promise<void>
   onAdvance: (orderId: string) => Promise<void>
+  onProcessPayment: (orderId: string, payment: PaymentRequest) => Promise<void>
   onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
   onContinueShopping: () => void
 }
@@ -851,6 +880,7 @@ function OrdersView({
   message,
   onRefresh,
   onAdvance,
+  onProcessPayment,
   onSaveShippingAndShip,
   onContinueShopping,
 }: OrdersViewProps) {
@@ -891,6 +921,7 @@ function OrdersView({
               order={order}
               isLoading={isLoading}
               onAdvance={onAdvance}
+              onProcessPayment={onProcessPayment}
               onSaveShippingAndShip={onSaveShippingAndShip}
             />
           ))}
@@ -904,6 +935,7 @@ type OrderCardProps = {
   order: Order
   isLoading: boolean
   onAdvance: (orderId: string) => Promise<void>
+  onProcessPayment: (orderId: string, payment: PaymentRequest) => Promise<void>
   onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
 }
 
@@ -911,13 +943,17 @@ function OrderCard({
   order,
   isLoading,
   onAdvance,
+  onProcessPayment,
   onSaveShippingAndShip,
 }: OrderCardProps) {
+  const [paymentMethod, setPaymentMethod] = useState<PaymentRequest['metodo']>('TARJETA')
   const [paymentDraft, setPaymentDraft] = useState({
     titular: '',
     numero: '',
     vencimiento: '',
+    cvv: '',
   })
+  const [transferReceiptName, setTransferReceiptName] = useState('')
   const [shippingDraft, setShippingDraft] = useState<ShippingAddress>({
     calle: order.direccionEnvio?.calle ?? '',
     numero: order.direccionEnvio?.numero ?? '',
@@ -946,10 +982,144 @@ function OrderCard({
     }
   }, [order.estado, order.id, onAdvance])
 
+  useEffect(() => {
+    function handlePayPalMessage(event: MessageEvent) {
+      if (
+        !order.id ||
+        typeof event.data !== 'object' ||
+        event.data === null ||
+        event.data.type !== 'RIVA_PAYPAL_APPROVED' ||
+        event.data.orderId !== order.id ||
+        typeof event.data.emailCuenta !== 'string'
+      ) {
+        return
+      }
+
+      void onProcessPayment(order.id, {
+        metodo: 'PAYPAL',
+        emailCuenta: event.data.emailCuenta,
+      })
+    }
+
+    window.addEventListener('message', handlePayPalMessage)
+    return () => window.removeEventListener('message', handlePayPalMessage)
+  }, [order.id, onProcessPayment])
+
   const canPay =
-    paymentDraft.titular.trim() !== '' &&
-    paymentDraft.numero.trim().length >= 8 &&
-    paymentDraft.vencimiento.trim() !== ''
+    paymentMethod === 'TARJETA'
+      ? paymentDraft.titular.trim() !== '' &&
+        paymentDraft.numero.trim().length >= 13 &&
+        paymentDraft.vencimiento.trim() !== '' &&
+        paymentDraft.cvv.trim().length >= 3
+      : paymentMethod === 'PAYPAL'
+        ? false
+        : transferReceiptName.trim() !== ''
+
+  function buildPaymentRequest(): PaymentRequest {
+    if (paymentMethod === 'TARJETA') {
+      return {
+        metodo: 'TARJETA',
+        numeroTarjeta: paymentDraft.numero,
+        titular: paymentDraft.titular,
+        vencimiento: paymentDraft.vencimiento,
+        cvv: paymentDraft.cvv,
+      }
+    }
+    return {
+      metodo: 'TRANSFERENCIA',
+      cbu: rivaTransferAccount.cbu,
+      alias: rivaTransferAccount.alias,
+      banco: rivaTransferAccount.banco,
+    }
+  }
+
+  function openPayPalWindow() {
+    if (!order.id || isLoading) {
+      return
+    }
+
+    const popup = window.open('', `riva-paypal-${order.id}`, 'width=460,height=560')
+    if (!popup) {
+      return
+    }
+
+    popup.document.write(`
+      <!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>PayPal - RIVA</title>
+          <style>
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: grid;
+              place-items: center;
+              background: #f7f9fc;
+              color: #10213f;
+              font-family: Inter, Arial, sans-serif;
+            }
+            form {
+              width: min(360px, calc(100vw - 32px));
+              display: grid;
+              gap: 14px;
+              padding: 28px;
+              background: white;
+              border: 1px solid #d7e0ef;
+              box-shadow: 0 18px 60px rgba(16, 33, 63, 0.14);
+            }
+            h1 {
+              margin: 0;
+              color: #003087;
+              font-size: 28px;
+            }
+            p {
+              margin: 0;
+              color: #526172;
+            }
+            input, button {
+              min-height: 44px;
+              font: inherit;
+            }
+            input {
+              border: 1px solid #c9d4e5;
+              padding: 10px 12px;
+            }
+            button {
+              border: 0;
+              background: #0070ba;
+              color: white;
+              font-weight: 800;
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <form id="paypal-form">
+            <h1>PayPal</h1>
+            <p>Pago simulado para pedido ${order.id.slice(0, 8)} por ${pesoFormatter.format(order.total)}.</p>
+            <input id="email" type="email" required placeholder="Email de cuenta PayPal" autofocus />
+            <input id="password" type="password" required placeholder="Contrasena" />
+            <button type="submit">Pagar con PayPal</button>
+          </form>
+          <script>
+            document.getElementById('paypal-form').addEventListener('submit', function (event) {
+              event.preventDefault();
+              var email = document.getElementById('email').value;
+              window.opener.postMessage({
+                type: 'RIVA_PAYPAL_APPROVED',
+                orderId: '${order.id}',
+                emailCuenta: email
+              }, '*');
+              window.close();
+            });
+          </script>
+        </body>
+      </html>
+    `)
+    popup.document.close()
+  }
 
   const canShip =
     shippingDraft.calle.trim() !== '' &&
@@ -1002,31 +1172,77 @@ function OrderCard({
           onSubmit={(event) => {
             event.preventDefault()
             if (order.id && canPay) {
-              void onAdvance(order.id)
+              void onProcessPayment(order.id, buildPaymentRequest())
             }
           }}
         >
-          <p>Pago simulado</p>
-          <input
-            placeholder="Titular"
-            value={paymentDraft.titular}
-            onChange={(event) => setPaymentDraft({ ...paymentDraft, titular: event.target.value })}
-          />
-          <input
-            placeholder="Numero de tarjeta"
-            value={paymentDraft.numero}
-            onChange={(event) => setPaymentDraft({ ...paymentDraft, numero: event.target.value })}
-          />
-          <input
-            placeholder="Vencimiento"
-            value={paymentDraft.vencimiento}
-            onChange={(event) =>
-              setPaymentDraft({ ...paymentDraft, vencimiento: event.target.value })
-            }
-          />
-          <button type="submit" disabled={!order.id || !canPay || isLoading}>
-            Confirmar pago simulado
-          </button>
+          <p>Metodo de pago</p>
+          <select
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value as PaymentRequest['metodo'])}
+          >
+            <option value="TARJETA">Tarjeta</option>
+            <option value="PAYPAL">PayPal</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+          </select>
+          {paymentMethod === 'TARJETA' && (
+            <>
+              <input
+                placeholder="Titular"
+                value={paymentDraft.titular}
+                onChange={(event) => setPaymentDraft({ ...paymentDraft, titular: event.target.value })}
+              />
+              <input
+                placeholder="Numero de tarjeta"
+                value={paymentDraft.numero}
+                onChange={(event) => setPaymentDraft({ ...paymentDraft, numero: event.target.value })}
+              />
+              <input
+                placeholder="Vencimiento MM/YY"
+                value={paymentDraft.vencimiento}
+                onChange={(event) =>
+                  setPaymentDraft({ ...paymentDraft, vencimiento: event.target.value })
+                }
+              />
+              <input
+                placeholder="CVV"
+                value={paymentDraft.cvv}
+                onChange={(event) => setPaymentDraft({ ...paymentDraft, cvv: event.target.value })}
+              />
+            </>
+          )}
+          {paymentMethod === 'PAYPAL' && (
+            <div className="payment-instructions">
+              <span>La autorizacion se completa en una ventana simulada de PayPal.</span>
+              <button type="button" disabled={!order.id || isLoading} onClick={openPayPalWindow}>
+                Abrir PayPal
+              </button>
+            </div>
+          )}
+          {paymentMethod === 'TRANSFERENCIA' && (
+            <>
+              <div className="bank-transfer-details">
+                <span>CBU {rivaTransferAccount.cbu}</span>
+                <span>Alias {rivaTransferAccount.alias}</span>
+                <span>{rivaTransferAccount.banco}</span>
+              </div>
+              <label className="payment-file">
+                Comprobante
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) =>
+                    setTransferReceiptName(event.target.files?.[0]?.name ?? '')
+                  }
+                />
+              </label>
+            </>
+          )}
+          {paymentMethod !== 'PAYPAL' && (
+            <button type="submit" disabled={!order.id || !canPay || isLoading}>
+              Pagar
+            </button>
+          )}
         </form>
       )}
 

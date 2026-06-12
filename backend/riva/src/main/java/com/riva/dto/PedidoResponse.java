@@ -12,6 +12,7 @@ public record PedidoResponse(
         LocalDateTime fecha,
         BigDecimal total,
         String estado,
+        String metodoPagoNombre,
         List<ItemPedidoResponse> items,
         List<TransicionEstadoResponse> historialEstados,
         DireccionEnvioResponse direccionEnvio
@@ -24,6 +25,7 @@ public record PedidoResponse(
                 pedido.getFecha(),
                 pedido.getTotal(),
                 pedido.nombreEstadoActual(),
+                pedido.getMetodoPagoNombre(),
                 pedido.getItems().stream().map(ItemPedidoResponse::from).toList(),
                 pedido.getHistorialEstados().stream().map(TransicionEstadoResponse::from).toList(),
                 DireccionEnvioResponse.from(pedido.getDireccionEnvio())

@@ -15,19 +15,25 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.riva.exception.NotFoundException;
 import com.riva.exception.ValidationException;
+import com.riva.dto.ProcesarPagoRequest;
+import com.riva.dto.ProcesarPagoResponse;
 import com.riva.model.cart.Carrito;
 import com.riva.model.pedido.DireccionEnvio;
 import com.riva.model.pedido.ItemPedido;
 import com.riva.model.pedido.Pedido;
+import com.riva.model.product.Product;
 import com.riva.model.product.ProductVariant;
 import com.riva.model.product.Size;
+import com.riva.pattern.payment.MetodoPagoFactory;
 import com.riva.pattern.state.EstadoPagado;
 import com.riva.repository.CarritoRepository;
 import com.riva.repository.PedidoRepository;
+import com.riva.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PedidoServiceTest {
@@ -37,6 +43,12 @@ class PedidoServiceTest {
 
     @Mock
     private CarritoRepository carritoRepository;
+
+    @Mock
+    private ProductRepository productRepository;
+
+    @Spy
+    private MetodoPagoFactory metodoPagoFactory = new MetodoPagoFactory();
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -127,6 +139,81 @@ class PedidoServiceTest {
                 .hasMessageContaining("direccion no puede modificarse");
     }
 
+    @Test
+    void procesarPagoExitosoAvanzaADPagadoDescuentaStockYVaciaCarrito() {
+        Pedido pedido = new Pedido("cliente-1", List.of(itemPedido()), null);
+        Product product = productoConStock(4);
+        Carrito carrito = carritoConItem("cliente-1");
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(carritoRepository.findByClienteId("cliente-1")).thenReturn(Optional.of(carrito));
+        when(carritoRepository.save(any(Carrito.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProcesarPagoResponse response = pedidoService.procesarPago(
+                "cliente-1",
+                "pedido-1",
+                requestTarjeta("4111111111111111")
+        );
+
+        assertThat(response.exito()).isTrue();
+        assertThat(response.pedido().estado()).isEqualTo("Pagado");
+        assertThat(response.pedido().metodoPagoNombre()).isEqualTo("Tarjeta");
+        assertThat(product.getVariants().getFirst().getStock()).isEqualTo(3);
+        assertThat(carrito.estaVacio()).isTrue();
+    }
+
+    @Test
+    void procesarPagoFallidoMantienePedidoPendienteSinDescontarStockNiVaciarCarrito() {
+        Pedido pedido = new Pedido("cliente-1", List.of(itemPedido()), null);
+        Product product = productoConStock(4);
+        Carrito carrito = carritoConItem("cliente-1");
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+
+        ProcesarPagoResponse response = pedidoService.procesarPago(
+                "cliente-1",
+                "pedido-1",
+                requestTarjeta("4111111111110000")
+        );
+
+        assertThat(response.exito()).isFalse();
+        assertThat(response.pedido().estado()).isEqualTo("Pendiente");
+        assertThat(product.getVariants().getFirst().getStock()).isEqualTo(4);
+        assertThat(carrito.estaVacio()).isFalse();
+    }
+
+    @Test
+    void procesarPagoConStockInsuficienteNoInvocaPagoYMantienePedidoPendiente() {
+        Pedido pedido = new Pedido("cliente-1", List.of(itemPedido()), null);
+        Product product = productoConStock(0);
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+
+        ProcesarPagoResponse response = pedidoService.procesarPago(
+                "cliente-1",
+                "pedido-1",
+                requestTarjeta("4111111111111111")
+        );
+
+        assertThat(response.exito()).isFalse();
+        assertThat(response.mensaje()).contains("Stock insuficiente");
+        assertThat(response.pedido().estado()).isEqualTo("Pendiente");
+        assertThat(product.getVariants().getFirst().getStock()).isZero();
+    }
+
+    @Test
+    void procesarPagoRechazaPedidoNoPendiente() {
+        Pedido pedido = new Pedido("cliente-1", List.of(itemPedido()), null);
+        pedido.avanzarEstado();
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+
+        assertThatThrownBy(() -> pedidoService.procesarPago("cliente-1", "pedido-1", requestTarjeta("4111111111111111")))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("Solo se pueden pagar pedidos pendientes");
+    }
+
     private static Carrito carritoConItem(String clienteId) {
         Carrito carrito = new Carrito(clienteId);
         carrito.agregarItem(variante(), 2);
@@ -146,6 +233,33 @@ class PedidoServiceTest {
                 BigDecimal.valueOf(100),
                 "prod-1",
                 "Remera"
+        );
+    }
+
+    private static Product productoConStock(int stock) {
+        return new Product(
+                "Remera",
+                "Remera basica",
+                BigDecimal.valueOf(100),
+                "Algodon",
+                "cat-1",
+                List.of("cat-1"),
+                List.of(new ProductVariant("var-1", Size.M, "Negro", stock)),
+                List.of("https://example.com/remera.jpg")
+        );
+    }
+
+    private static ProcesarPagoRequest requestTarjeta(String numeroTarjeta) {
+        return new ProcesarPagoRequest(
+                "TARJETA",
+                numeroTarjeta,
+                "Guido Morabito",
+                "12/29",
+                "123",
+                null,
+                null,
+                null,
+                null
         );
     }
 
