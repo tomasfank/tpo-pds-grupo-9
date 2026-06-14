@@ -321,7 +321,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-19 |
-| Estado de implementacion | PARCIAL - Frontend muestra pago simulado cuando el pedido esta `Pendiente`. Backend solo tiene contrato minimo `MetodoPago`; no existen estrategias concretas ni asociacion persistida de metodo de pago. |
+| Estado de implementacion | DONE (backend) - Strategy completo: `MetodoPagoFactory` instancia en tiempo de ejecucion la estrategia segun el metodo elegido (`PagoTarjeta` / `PagoPayPal` / `PagoTransferencia`), valida el formato de los datos via `MetodoPago.validarDatosPago()` y el metodo seleccionado queda persistido en el pedido (`metodoPagoNombre`). La seleccion + procesamiento se reciben en `POST /api/orders/{id}/payment`. Frontend muestra pago simulado cuando el pedido esta `Pendiente`; queda por verificar la UI de seleccion de metodo con sus tres opciones. |
 | Nombre | Seleccionar Método de Pago |
 | Actor principal | Cliente |
 | Precondiciones | Existe un pedido en estado "Pendiente" asociado al cliente, creado mediante CU-18. |
@@ -338,7 +338,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-20 |
-| Estado de implementacion | PARCIAL - Frontend simula pago y avanza estado a `Pagado`. Backend tiene `Pedido.pagar()` y contrato `MetodoPago`, pero no hay Strategy completo, proveedor externo, descuento de stock, notificaciones ni vaciado de carrito post-pago. |
+| Estado de implementacion | PARCIAL - Backend completo salvo Observer: `PedidoService.procesarPago` instancia el Strategy, delega en el proveedor externo via Adapters (`AdapterTarjeta` / `AdapterPayPal` / `AdapterTransferencia` sobre servicios externos simulados), revalida stock por concurrencia, descuenta el stock de las variantes, transiciona el pedido Pendiente -> Pagado (State) y vacia el carrito post-pago. Falta unicamente disparar las notificaciones al cliente (Observer, ver CU-24, aun no cableado). |
 | Nombre | Procesar Pago |
 | Actor principal | Cliente |
 | Actores secundarios | Sistema de Pagos (externo) |
@@ -373,7 +373,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-22 |
-| Estado de implementacion | PARCIAL - Backend permite consultar detalle y rechaza pedidos de otro cliente; frontend muestra detalle embebido en cada tarjeta de historial. Falta metodo de pago utilizado real porque Strategy no esta implementado. |
+| Estado de implementacion | DONE - Backend expone el detalle completo (items, variantes, cantidades, precios unitarios, total, metodo de pago utilizado via `metodoPagoNombre` e historial de transiciones de estado) y rechaza pedidos de otro cliente. Frontend muestra el detalle embebido en cada tarjeta del historial. |
 | Nombre | Consultar Detalle de Pedido |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente seleccionó un pedido desde el historial (vía CU-21). El pedido pertenece al cliente. |
@@ -407,7 +407,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-24 |
-| Estado de implementacion | PENDIENTE - Solo existe contrato minimo `CanalNotificacion`; no hay preferencias, canales concretos, suscripcion dinamica ni UI de configuracion. |
+| Estado de implementacion | PENDIENTE - El lado Subject del Observer ya existe en `Pedido` (`suscribir` / `desuscribir` / `notificar`) junto al contrato `CanalNotificacion`, pero falta todo lo demas: canales concretos (Email / SMS / Push), preferencias persistidas por cliente, suscripcion dinamica real, la invocacion efectiva de `notificar()` ante cambios de estado y la UI de configuracion. |
 | Nombre | Configurar Canales de Notificación |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
