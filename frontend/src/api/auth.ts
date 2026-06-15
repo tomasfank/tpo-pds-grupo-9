@@ -20,6 +20,17 @@ type LoginResponse = {
   email: string
 }
 
+// CU-01 — registro de Cliente contra POST /api/auth/register. El backend valida
+// email unico y robustez de contrasena, y crea el usuario con rol Cliente.
+export async function register(
+  nombre: string,
+  apellido: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  await rivaApi.post('/auth/register', { nombre, apellido, email, password })
+}
+
 // CU-02 / CU-03 — inicio de sesion contra POST /api/auth/login.
 // El backend devuelve el JWT mas los datos basicos del usuario y su rol.
 export async function login(email: string, password: string): Promise<AuthSession> {

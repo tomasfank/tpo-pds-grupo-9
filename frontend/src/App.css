@@ -506,6 +506,49 @@ h3 {
   color: var(--accent);
 }
 
+.status-text.is-success {
+  color: #1f7a4d;
+}
+
+/* CU-01/CU-02 — pie de los formularios de auth para alternar login/registro. */
+.auth-switch {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Saludo al cliente autenticado en el header. */
+.session-greeting {
+  align-self: center;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* CU-24 — filas de checkbox de la config de notificaciones. */
+.checkbox-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
 .cart-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

@@ -101,9 +101,19 @@ export type ViewName =
   | 'product'
   | 'cart'
   | 'orders'
+  | 'login'
+  | 'register'
+  | 'notifications'
   | 'admin-login'
   | 'admin-products'
   | 'admin-categories'
+
+// CU-24 — canales de notificacion que el cliente decide recibir (patron Observer).
+export type NotificationPreferences = {
+  email: boolean
+  sms: boolean
+  push: boolean
+}
 
 // CU-13 — categoria plana (nodo del arbol) tal como la expone el backend para administracion.
 export type Category = {

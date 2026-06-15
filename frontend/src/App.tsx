@@ -30,8 +30,13 @@ import {
   getSession,
   login as loginRequest,
   logout as logoutRequest,
+  register as registerRequest,
   setSession,
 } from './api/auth'
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from './api/notifications'
 import {
   activateCategory,
   createCategory,
@@ -47,6 +52,7 @@ import type {
   CategoryOption,
   CategoryTreeNode,
   CreateProductPayload,
+  NotificationPreferences,
   Order,
   PaymentRequest,
   Product,
@@ -145,6 +151,11 @@ function App() {
   const [ordersMessage, setOrdersMessage] = useState('')
   const [authError, setAuthError] = useState('')
   const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [registerMessage, setRegisterMessage] = useState('')
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null)
+  const [prefsError, setPrefsError] = useState('')
+  const [prefsMessage, setPrefsMessage] = useState('')
+  const [isPrefsLoading, setIsPrefsLoading] = useState(false)
   const [adminError, setAdminError] = useState('')
   const [adminMessage, setAdminMessage] = useState('')
   const [isAdminLoading, setIsAdminLoading] = useState(false)
@@ -187,10 +198,16 @@ function App() {
     }
   }, [])
 
+  // El carrito existe solo para un cliente autenticado (CU-14): si no hay sesion
+  // de cliente, lo limpiamos en lugar de pegarle al backend (que devolveria 401).
   useEffect(() => {
     let isMounted = true
 
     async function loadCart() {
+      if (session?.rol !== 'CLIENTE') {
+        setCart(null)
+        return
+      }
       try {
         setIsCartLoading(true)
         setCartError('')
@@ -215,7 +232,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
     let isMounted = true
@@ -308,6 +325,12 @@ function App() {
   }
 
   async function handleAddToCart(product: Product, variantId: string, cantidad: number) {
+    // CU-14 precondicion: el cliente debe haber iniciado sesion.
+    if (session?.rol !== 'CLIENTE') {
+      setAuthError('Inicia sesion como cliente para agregar productos al carrito.')
+      navigate({ view: 'login' })
+      return
+    }
     try {
       setIsCartLoading(true)
       setCartError('')
@@ -448,8 +471,110 @@ function App() {
   }
 
   function navigateToOrders() {
+    // CU-21 precondicion: el cliente debe haber iniciado sesion.
+    if (session?.rol !== 'CLIENTE') {
+      setAuthError('Inicia sesion como cliente para ver tus pedidos.')
+      navigate({ view: 'login' })
+      return
+    }
     navigate({ view: 'orders' })
     void loadOrders()
+  }
+
+  function navigateToCart() {
+    // CU-14 a CU-18 requieren cliente autenticado.
+    if (session?.rol !== 'CLIENTE') {
+      setAuthError('Inicia sesion como cliente para ver tu carrito.')
+      navigate({ view: 'login' })
+      return
+    }
+    navigate({ view: 'cart' })
+  }
+
+  // CU-02 — Iniciar Sesion como Cliente.
+  async function handleClientLogin(email: string, password: string) {
+    try {
+      setIsAuthLoading(true)
+      setAuthError('')
+      setRegisterMessage('')
+      const nextSession = await loginRequest(email, password)
+      // CU-02 flujo alternativo 3a: esta via es solo para clientes.
+      if (nextSession.rol !== 'CLIENTE') {
+        setAuthError('Esta cuenta no es de cliente. Usa el acceso de administrador.')
+        return
+      }
+      setSession(nextSession)
+      setSessionState(nextSession)
+      navigate({ view: 'home' })
+    } catch (error) {
+      // CU-02 flujo alternativo 2a: error generico, sin distinguir email de contrasena.
+      setAuthError(extractApiMessage(error, 'Email o contrasena incorrectos.'))
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  // CU-01 — Registrarse como Cliente.
+  async function handleRegister(
+    nombre: string,
+    apellido: string,
+    email: string,
+    password: string,
+  ) {
+    try {
+      setIsAuthLoading(true)
+      setAuthError('')
+      setRegisterMessage('')
+      await registerRequest(nombre, apellido, email, password)
+      setRegisterMessage('Cuenta creada con exito. Ya podes iniciar sesion.')
+      navigate({ view: 'login' })
+    } catch (error) {
+      // CU-01 flujo alternativo: email duplicado o contrasena debil (mensaje del backend).
+      setAuthError(extractApiMessage(error, 'No pudimos crear la cuenta. Revisa los datos.'))
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  // CU-24 — carga las preferencias de notificacion del cliente.
+  async function loadNotificationPrefs() {
+    try {
+      setIsPrefsLoading(true)
+      setPrefsError('')
+      const prefs = await getNotificationPreferences()
+      setNotificationPrefs(prefs)
+    } catch {
+      setPrefsError('No pudimos cargar tus preferencias de notificacion.')
+    } finally {
+      setIsPrefsLoading(false)
+    }
+  }
+
+  // CU-24 — persiste los canales elegidos (la suscripcion al pedido se deriva de aca).
+  async function handleSavePreferences(prefs: NotificationPreferences) {
+    try {
+      setIsPrefsLoading(true)
+      setPrefsError('')
+      setPrefsMessage('')
+      const saved = await updateNotificationPreferences(prefs)
+      setNotificationPrefs(saved)
+      setPrefsMessage('Preferencias de notificacion actualizadas.')
+    } catch {
+      setPrefsError('No pudimos guardar tus preferencias.')
+    } finally {
+      setIsPrefsLoading(false)
+    }
+  }
+
+  function navigateToNotifications() {
+    if (session?.rol === 'CLIENTE') {
+      setPrefsMessage('')
+      navigate({ view: 'notifications' })
+      void loadNotificationPrefs()
+    } else {
+      setAuthError('Inicia sesion como cliente para configurar tus notificaciones.')
+      navigate({ view: 'login' })
+    }
   }
 
   // CU-03 — Iniciar Sesion como Administrador.
@@ -481,6 +606,11 @@ function App() {
     setSessionState(null)
     setAdminMessage('')
     setAdminError('')
+    setCart(null)
+    setOrders([])
+    setNotificationPrefs(null)
+    setPrefsMessage('')
+    setPrefsError('')
     navigate({ view: 'home' })
   }
 
@@ -638,6 +768,7 @@ function App() {
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories])
   const cartItemsCount = cart?.items.reduce((total, item) => total + item.cantidad, 0) ?? 0
   const isAdmin = session?.rol === 'ADMINISTRADOR'
+  const isClient = session?.rol === 'CLIENTE'
 
   return (
     <div className="store-shell">
@@ -661,13 +792,26 @@ function App() {
           ))}
         </nav>
 
-        <button className="cart-link" type="button" onClick={() => navigate({ view: 'cart' })}>
-          Carrito <span>{cartItemsCount}</span>
-        </button>
-        <button className="cart-link" type="button" onClick={navigateToOrders}>
-          Pedidos
-        </button>
-        {isAdmin ? (
+        {!isAdmin && (
+          <button className="cart-link" type="button" onClick={navigateToCart}>
+            Carrito <span>{cartItemsCount}</span>
+          </button>
+        )}
+        {isClient && (
+          <>
+            <button className="cart-link" type="button" onClick={navigateToOrders}>
+              Pedidos
+            </button>
+            <button className="cart-link" type="button" onClick={navigateToNotifications}>
+              Notificaciones
+            </button>
+            <span className="session-greeting">Hola, {session?.nombre}</span>
+            <button className="cart-link ghost-button" type="button" onClick={handleLogout}>
+              Salir
+            </button>
+          </>
+        )}
+        {isAdmin && (
           <>
             <button className="cart-link" type="button" onClick={navigateToAdmin}>
               Productos
@@ -679,10 +823,34 @@ function App() {
               Salir
             </button>
           </>
-        ) : (
-          <button className="cart-link" type="button" onClick={navigateToAdmin}>
-            Admin
-          </button>
+        )}
+        {!session && (
+          <>
+            <button
+              className="cart-link"
+              type="button"
+              onClick={() => {
+                setAuthError('')
+                navigate({ view: 'login' })
+              }}
+            >
+              Ingresar
+            </button>
+            <button
+              className="cart-link"
+              type="button"
+              onClick={() => {
+                setAuthError('')
+                setRegisterMessage('')
+                navigate({ view: 'register' })
+              }}
+            >
+              Crear cuenta
+            </button>
+            <button className="cart-link ghost-button" type="button" onClick={navigateToAdmin}>
+              Admin
+            </button>
+          </>
         )}
       </header>
 
@@ -766,6 +934,83 @@ function App() {
             onContinueShopping={() => navigate({ view: 'home' })}
           />
         )}
+
+        {route.view === 'login' &&
+          (isClient ? (
+            <EmptyState
+              eyebrow="Sesion activa"
+              title="Ya iniciaste sesion"
+              description="Explora el catalogo y gestiona tu carrito y pedidos."
+              actionLabel="Ir al inicio"
+              onAction={() => navigate({ view: 'home' })}
+            />
+          ) : (
+            <ClientLoginView
+              isLoading={isAuthLoading}
+              error={authError}
+              message={registerMessage}
+              onLogin={handleClientLogin}
+              onGoToRegister={() => {
+                setAuthError('')
+                setRegisterMessage('')
+                navigate({ view: 'register' })
+              }}
+            />
+          ))}
+
+        {route.view === 'register' &&
+          (isClient ? (
+            <EmptyState
+              eyebrow="Sesion activa"
+              title="Ya tenes una cuenta activa"
+              description="Explora el catalogo y gestiona tu carrito y pedidos."
+              actionLabel="Ir al inicio"
+              onAction={() => navigate({ view: 'home' })}
+            />
+          ) : (
+            <RegisterView
+              isLoading={isAuthLoading}
+              error={authError}
+              onRegister={handleRegister}
+              onGoToLogin={() => {
+                setAuthError('')
+                navigate({ view: 'login' })
+              }}
+            />
+          ))}
+
+        {route.view === 'notifications' &&
+          (isClient ? (
+            notificationPrefs ? (
+              <NotificationsView
+                initialPreferences={notificationPrefs}
+                isLoading={isPrefsLoading}
+                error={prefsError}
+                message={prefsMessage}
+                onSave={handleSavePreferences}
+              />
+            ) : (
+              <EmptyState
+                eyebrow="Notificaciones"
+                title={prefsError ? 'No pudimos cargar tus preferencias' : 'Cargando preferencias...'}
+                description={
+                  prefsError
+                    ? 'Volve a intentarlo en unos instantes.'
+                    : 'Estamos obteniendo la configuracion de tus canales.'
+                }
+                actionLabel="Ir al inicio"
+                onAction={() => navigate({ view: 'home' })}
+              />
+            )
+          ) : (
+            <EmptyState
+              eyebrow="Acceso restringido"
+              title="Necesitas iniciar sesion como cliente"
+              description="La configuracion de notificaciones es parte de tu cuenta de cliente."
+              actionLabel="Ir al login"
+              onAction={() => navigate({ view: 'login' })}
+            />
+          ))}
 
         {route.view === 'admin-login' &&
           (isAdmin ? (
@@ -1708,6 +1953,238 @@ function AdminLoginView({ isLoading, error, onLogin }: AdminLoginViewProps) {
         <button type="submit" disabled={!canSubmit || isLoading}>
           {isLoading ? 'Ingresando...' : 'Ingresar'}
         </button>
+        {error && <p className="status-text is-error">{error}</p>}
+      </form>
+    </section>
+  )
+}
+
+type ClientLoginViewProps = {
+  isLoading: boolean
+  error: string
+  message: string
+  onLogin: (email: string, password: string) => Promise<void>
+  onGoToRegister: () => void
+}
+
+// CU-02 — Iniciar Sesion como Cliente.
+function ClientLoginView({ isLoading, error, message, onLogin, onGoToRegister }: ClientLoginViewProps) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const canSubmit = email.trim() !== '' && password.trim() !== ''
+
+  return (
+    <section className="admin-auth">
+      <div className="view-heading">
+        <p className="eyebrow">Mi cuenta</p>
+        <h1>Iniciar sesion</h1>
+        <p>Accede para comprar, seguir tus pedidos y configurar tus notificaciones.</p>
+      </div>
+
+      <form
+        className="order-form admin-login-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (canSubmit && !isLoading) {
+            void onLogin(email.trim(), password)
+          }
+        }}
+      >
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="cliente@riva.com"
+          />
+        </label>
+        <label>
+          Contrasena
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="********"
+          />
+        </label>
+        <button type="submit" disabled={!canSubmit || isLoading}>
+          {isLoading ? 'Ingresando...' : 'Ingresar'}
+        </button>
+        {message && <p className="status-text is-success">{message}</p>}
+        {error && <p className="status-text is-error">{error}</p>}
+      </form>
+
+      <p className="auth-switch">
+        No tenes cuenta?{' '}
+        <button type="button" className="link-button" onClick={onGoToRegister}>
+          Crear cuenta
+        </button>
+      </p>
+    </section>
+  )
+}
+
+type RegisterViewProps = {
+  isLoading: boolean
+  error: string
+  onRegister: (nombre: string, apellido: string, email: string, password: string) => Promise<void>
+  onGoToLogin: () => void
+}
+
+// CU-01 — Registrarse como Cliente.
+function RegisterView({ isLoading, error, onRegister, onGoToLogin }: RegisterViewProps) {
+  const [nombre, setNombre] = useState('')
+  const [apellido, setApellido] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [formError, setFormError] = useState('')
+
+  const canSubmit =
+    nombre.trim() !== '' &&
+    apellido.trim() !== '' &&
+    email.trim() !== '' &&
+    password !== '' &&
+    confirm !== ''
+
+  return (
+    <section className="admin-auth">
+      <div className="view-heading">
+        <p className="eyebrow">Mi cuenta</p>
+        <h1>Crear cuenta</h1>
+        <p>Registrate como cliente para comprar en RIVA.</p>
+      </div>
+
+      <form
+        className="order-form admin-login-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setFormError('')
+          // CU-01 excepcion: las dos contrasenas deben coincidir.
+          if (password !== confirm) {
+            setFormError('Las contrasenas no coinciden.')
+            return
+          }
+          if (canSubmit && !isLoading) {
+            void onRegister(nombre.trim(), apellido.trim(), email.trim(), password)
+          }
+        }}
+      >
+        <label>
+          Nombre
+          <input value={nombre} onChange={(event) => setNombre(event.target.value)} />
+        </label>
+        <label>
+          Apellido
+          <input value={apellido} onChange={(event) => setApellido(event.target.value)} />
+        </label>
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="cliente@riva.com"
+          />
+        </label>
+        <label>
+          Contrasena
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Min. 8 caracteres con mayuscula y numero"
+          />
+        </label>
+        <label>
+          Repetir contrasena
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+          />
+        </label>
+        <button type="submit" disabled={!canSubmit || isLoading}>
+          {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
+        </button>
+        {formError && <p className="status-text is-error">{formError}</p>}
+        {error && <p className="status-text is-error">{error}</p>}
+      </form>
+
+      <p className="auth-switch">
+        Ya tenes cuenta?{' '}
+        <button type="button" className="link-button" onClick={onGoToLogin}>
+          Iniciar sesion
+        </button>
+      </p>
+    </section>
+  )
+}
+
+type NotificationsViewProps = {
+  initialPreferences: NotificationPreferences
+  isLoading: boolean
+  error: string
+  message: string
+  onSave: (preferences: NotificationPreferences) => Promise<void>
+}
+
+// CU-24 — Configurar Canales de Notificacion (patron Observer). Los toggles se
+// siembran desde las preferencias cargadas (el componente se remonta via `key`
+// cuando llegan del backend), evitando sincronizar estado dentro de un efecto.
+function NotificationsView({ initialPreferences, isLoading, error, message, onSave }: NotificationsViewProps) {
+  const [email, setEmail] = useState(initialPreferences.email)
+  const [sms, setSms] = useState(initialPreferences.sms)
+  const [push, setPush] = useState(initialPreferences.push)
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (isLoading) {
+      return
+    }
+    // CU-24 flujo alternativo 3a: si apaga todos los canales, se advierte y se pide confirmacion.
+    if (!email && !sms && !push) {
+      const confirmar = window.confirm(
+        'Vas a desactivar todos los canales y no recibiras notificaciones sobre tus pedidos. Continuar?',
+      )
+      if (!confirmar) {
+        return
+      }
+    }
+    void onSave({ email, sms, push })
+  }
+
+  return (
+    <section className="admin-auth">
+      <div className="view-heading">
+        <p className="eyebrow">Mi cuenta</p>
+        <h1>Notificaciones</h1>
+        <p>Elegi por que canales queres recibir avisos sobre el estado de tus pedidos.</p>
+      </div>
+
+      <form className="order-form admin-login-form" onSubmit={handleSubmit}>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={email} onChange={(event) => setEmail(event.target.checked)} />
+          Email
+        </label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={sms} onChange={(event) => setSms(event.target.checked)} />
+          SMS
+        </label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={push} onChange={(event) => setPush(event.target.checked)} />
+          Push
+        </label>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Guardando...' : 'Guardar preferencias'}
+        </button>
+        {message && <p className="status-text is-success">{message}</p>}
         {error && <p className="status-text is-error">{error}</p>}
       </form>
     </section>

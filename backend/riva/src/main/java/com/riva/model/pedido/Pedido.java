@@ -110,7 +110,19 @@ public class Pedido implements SujetoObservable {
 
     @Override
     public void notificar() {
-        observadores.forEach(canal -> canal.actualizar(this));
+        // CU-23 (flujo 6a): el fallo de un canal se registra y no interrumpe a los
+        // demas ni revierte el estado del pedido.
+        observadores.forEach(canal -> {
+            try {
+                canal.actualizar(this);
+            } catch (RuntimeException ex) {
+                System.err.printf(
+                        "Fallo al notificar el pedido %s por un canal: %s%n",
+                        id,
+                        ex.getMessage()
+                );
+            }
+        });
     }
 
     public void setEstado(EstadoPedido estado) {

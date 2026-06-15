@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getToken } from './auth'
 import type { Cart } from '../types'
 
 const apiUrl =
@@ -6,13 +7,18 @@ const apiUrl =
   import.meta.env.REACT_APP_API_URL ??
   'http://localhost:8080'
 
-const clienteId = 'cliente-demo'
-
 const rivaApi = axios.create({
   baseURL: `${apiUrl}/api`,
-  headers: {
-    'X-Cliente-Id': clienteId,
-  },
+})
+
+// El carrito pertenece al cliente autenticado (CU-14 a CU-17): el backend lo
+// resuelve desde el JWT, por eso se adjunta el Bearer en cada request.
+rivaApi.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 export async function getCart() {

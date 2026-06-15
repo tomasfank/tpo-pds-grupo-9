@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getToken } from './auth'
 import type { Order, PaymentRequest, PaymentResponse, ShippingAddress } from '../types'
 
 const apiUrl =
@@ -6,13 +7,19 @@ const apiUrl =
   import.meta.env.REACT_APP_API_URL ??
   'http://localhost:8080'
 
-const clienteId = 'cliente-demo'
-
 const rivaApi = axios.create({
   baseURL: `${apiUrl}/api`,
-  headers: {
-    'X-Cliente-Id': clienteId,
-  },
+})
+
+// Los pedidos pertenecen al cliente autenticado (CU-18 a CU-22). El avance de
+// estado (CU-23) exige rol ADMINISTRADOR; en ambos casos el backend resuelve la
+// identidad desde el JWT, que se adjunta aca.
+rivaApi.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 export async function createOrder() {

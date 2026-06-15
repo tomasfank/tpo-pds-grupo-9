@@ -15,7 +15,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-01 |
-| Estado de implementacion | DONE (backend) - `AuthController POST /api/auth/register` crea un `Cliente` (jerarquía `Usuario` fiel a la UML) validando email único y robustez mínima de contraseña (`PasswordPolicy`), hasheando con BCrypt. Falta la pantalla de registro en frontend. |
+| Estado de implementacion | DONE - `AuthController POST /api/auth/register` crea un `Cliente` (jerarquía `Usuario` fiel a la UML) validando email único y robustez mínima de contraseña (`PasswordPolicy`), hasheando con BCrypt. Frontend: `RegisterView` (vista pública) toma nombre/apellido/email/contraseña con confirmación local (excepción "las contraseñas no coinciden"), postea a `/api/auth/register` (`api/auth.ts`), surfacea los errores del backend (email duplicado, contraseña débil — flujo alternativo) y, ante éxito, redirige al login con mensaje de confirmación. |
 | Nombre | Registrarse como Cliente |
 | Actor principal | Usuario no registrado |
 | Precondiciones | El usuario no posee cuenta en el sistema. El usuario accede a la plataforma desde la pantalla pública. |
@@ -32,7 +32,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-02 |
-| Estado de implementacion | DONE (backend) - `POST /api/auth/login` valida credenciales y devuelve JWT (con `userId`, email, rol) + error genérico ante datos incorrectos. Carrito y pedidos usan el principal autenticado (se eliminó `X-Cliente-Id`). Falta UI de login y manejo de pantalla. CU-05 (recuperar) y bloqueo por intentos quedan fuera de alcance. |
+| Estado de implementacion | DONE - `POST /api/auth/login` valida credenciales y devuelve JWT (con `userId`, email, rol) + error genérico ante datos incorrectos. Carrito y pedidos usan el principal autenticado (se eliminó `X-Cliente-Id`). Frontend: `ClientLoginView` valida el rol `CLIENTE` del lado del cliente (flujo alternativo 3a — rechaza administradores por esta vía), persiste el JWT en `localStorage` y redirige al inicio; el header muestra el saludo + Salir y `api/cart.ts`/`api/orders.ts`/`api/notifications.ts` adjuntan el Bearer. Carrito/pedidos/notificaciones exigen sesión de cliente (sin sesión → login). CU-05 (recuperar) y bloqueo por intentos quedan fuera de alcance. |
 | Nombre | Iniciar Sesión como Cliente |
 | Actor principal | Cliente |
 | Precondiciones | El usuario posee una cuenta activa con rol Cliente (registrada mediante CU-01). El usuario no tiene una sesión activa. |
@@ -236,7 +236,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-14 |
-| Estado de implementacion | DONE - Backend agrega variantes al carrito validando stock y acumulando cantidad; frontend permite seleccionar variante/cantidad desde detalle y agregar al carrito. Autenticacion real sigue pendiente y se usa `X-Cliente-Id` temporal. |
+| Estado de implementacion | DONE - Backend agrega variantes al carrito validando stock y acumulando cantidad; frontend permite seleccionar variante/cantidad desde detalle y agregar al carrito. El carrito pertenece al cliente autenticado vía JWT (`api/cart.ts` adjunta el Bearer; se eliminó el `X-Cliente-Id` temporal). Si no hay sesión de cliente, "Agregar al carrito" redirige al login (precondición CU-02). |
 | Nombre | Agregar Producto al Carrito |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). El cliente se encuentra en la ficha del producto (vía CU-09). El producto está activo y posee stock en al menos una variante. |
@@ -338,7 +338,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-20 |
-| Estado de implementacion | PARCIAL - Backend completo salvo Observer: `PedidoService.procesarPago` instancia el Strategy, delega en el proveedor externo via Adapters (`AdapterTarjeta` / `AdapterPayPal` / `AdapterTransferencia` sobre servicios externos simulados), revalida stock por concurrencia, descuenta el stock de las variantes, transiciona el pedido Pendiente -> Pagado (State) y vacia el carrito post-pago. Falta unicamente la integracion del Observer: aunque el avance de estado invoca `notificar()`, el service no suscribe los canales del cliente al pedido, por lo que el pago exitoso todavia no genera notificaciones reales (ver CU-24). |
+| Estado de implementacion | DONE (backend) - `PedidoService.procesarPago` instancia el Strategy, delega en el proveedor externo via Adapters (`AdapterTarjeta` / `AdapterPayPal` / `AdapterTransferencia` sobre servicios externos simulados), revalida stock por concurrencia, descuenta el stock de las variantes, transiciona el pedido Pendiente -> Pagado (State) y vacia el carrito post-pago. Observer integrado: antes de la transicion el service suscribe al pedido los canales habilitados del cliente (`Cliente.canalesNotificacionHabilitados()` segun sus `PreferenciasNotificacion`), por lo que el pago exitoso dispara las notificaciones simuladas (Email/SMS/Push) por los canales activos. Frontend: el cliente paga desde la vista `Pedidos` (Tarjeta/PayPal/Transferencia simulados), lo que ahora genera la notificacion real (visible en los logs del backend). |
 | Nombre | Procesar Pago |
 | Actor principal | Cliente |
 | Actores secundarios | Sistema de Pagos (externo) |
@@ -356,7 +356,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-21 |
-| Estado de implementacion | DONE - Backend lista pedidos por cliente ordenados por fecha descendente y frontend muestra historial en vista `Pedidos`, usando `X-Cliente-Id` temporal. |
+| Estado de implementacion | DONE - Backend lista pedidos por cliente ordenados por fecha descendente y frontend muestra historial en vista `Pedidos`, resolviendo la identidad desde el JWT (`api/orders.ts` adjunta el Bearer; se eliminó el `X-Cliente-Id` temporal). El acceso a "Pedidos" exige sesión de cliente. |
 | Nombre | Consultar Historial de Pedidos |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
@@ -390,7 +390,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-23 |
-| Estado de implementacion | PARCIAL - Backend implementa State y `POST /api/orders/{id}/advance`, ya restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig` (CU-03 implementado); `Pedido.avanzarEstado()` dispara `notificar()` (Observer) en cada transicion. Falta que el service suscriba los canales del cliente al pedido segun sus preferencias: hoy `notificar()` recorre una lista de observadores vacia en el flujo real, por lo que aun no se envian notificaciones efectivas. Frontend permite pago/envio simulado y entrega automatica. |
+| Estado de implementacion | DONE (backend) - Backend implementa State y `POST /api/orders/{id}/advance`, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Observer integrado: `PedidoService.avanzarEstado` suscribe los canales habilitados del cliente al pedido antes de cada transicion, y `Pedido.avanzarEstado()` dispara `notificar()`; ademas `Pedido.notificar()` aisla el fallo de un canal (lo registra y continua, sin revertir el estado — flujo alternativo 6a). Cubierto por `PedidoServiceTest` (suscripcion segun preferencias) y `ObserverTest`. Limitacion de UI: avanzar estado requiere token de administrador; no hay panel admin de pedidos dedicado (queda como follow-up), por lo que la transicion Enviado/Entregado se ejercita via API admin o por los controles existentes en la vista `Pedidos` con sesion de administrador. |
 | Nombre | Avanzar Estado de Pedido |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos un pedido en estado distinto de "Entregado". |
@@ -407,7 +407,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-24 |
-| Estado de implementacion | PARCIAL - El patron Observer esta estructuralmente completo y testeado (`ObserverTest`): `Pedido` implementa `SujetoObservable`, existen `CanalEmail`/`CanalSMS`/`CanalPush` y `PreferenciasNotificacion`, ahora embebida en `Cliente` (default todos activos). Con Usuarios/Auth ya disponibles, queda desbloqueada la integración: persistir/editar preferencias por cliente, que el service suscriba los canales al `Pedido` desde esas preferencias, y exponer `PUT /api/notifications/preferences` + UI. |
+| Estado de implementacion | DONE - Observer completo e integrado: `Pedido` implementa `SujetoObservable`; `Cliente` embebe `PreferenciasNotificacion` (default todos activos) y expone `canalesNotificacionHabilitados()` que arma `CanalEmail`/`CanalSMS`/`CanalPush` segun las preferencias (Email con el contacto real; SMS/Push con destino simulado derivado de la cuenta — RF-25). Backend: `NotificationService` + `GET`/`PUT /api/notifications/preferences` (solo Cliente autenticado) persisten las preferencias; `PedidoService` deriva la suscripcion de esas preferencias al notificar (ver CU-20/CU-23). El backend permite desactivar los tres canales. Frontend: `NotificationsView` (Configuración → Notificaciones) muestra los canales como checkboxes, los guarda vía `PUT` y, si el cliente apaga todos, advierte y pide confirmación (flujo alternativo 3a). Cubierto por `NotificationServiceTest` y `ClienteTest`. |
 | Nombre | Configurar Canales de Notificación |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |

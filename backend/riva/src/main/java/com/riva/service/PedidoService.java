@@ -15,12 +15,15 @@ import com.riva.model.pedido.ItemPedido;
 import com.riva.model.pedido.Pedido;
 import com.riva.model.product.Product;
 import com.riva.model.product.ProductVariant;
+import com.riva.model.user.Cliente;
+import com.riva.model.user.Usuario;
 import com.riva.pattern.payment.MetodoPago;
 import com.riva.pattern.payment.MetodoPagoFactory;
 import com.riva.pattern.payment.ResultadoPago;
 import com.riva.repository.CarritoRepository;
 import com.riva.repository.PedidoRepository;
 import com.riva.repository.ProductRepository;
+import com.riva.repository.UsuarioRepository;
 
 @Service
 public class PedidoService {
@@ -28,13 +31,16 @@ public class PedidoService {
     private final PedidoRepository pedidoRepository;
     private final CarritoRepository carritoRepository;
     private final ProductRepository productRepository;
+    private final UsuarioRepository usuarioRepository;
     private final MetodoPagoFactory metodoPagoFactory;
 
     public PedidoService(PedidoRepository pedidoRepository, CarritoRepository carritoRepository,
-                         ProductRepository productRepository, MetodoPagoFactory metodoPagoFactory) {
+                         ProductRepository productRepository, UsuarioRepository usuarioRepository,
+                         MetodoPagoFactory metodoPagoFactory) {
         this.pedidoRepository = pedidoRepository;
         this.carritoRepository = carritoRepository;
         this.productRepository = productRepository;
+        this.usuarioRepository = usuarioRepository;
         this.metodoPagoFactory = metodoPagoFactory;
     }
 
@@ -75,6 +81,9 @@ public class PedidoService {
         Pedido pedido = pedidoRepository.findById(pedidoId)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + pedidoId));
         pedido.reconstruirEstadoDesdePersistencia();
+        // CU-23 (Observer): suscribimos los canales habilitados del cliente antes de
+        // avanzar, ya que avanzarEstado() dispara notificar() en la transicion.
+        suscribirCanalesDelCliente(pedido);
         pedido.avanzarEstado();
         return pedidoRepository.save(pedido);
     }
@@ -113,10 +122,22 @@ public class PedidoService {
 
         descontarStock(pedido);
         pedido.registrarMetodoPago(metodoPagoNombre);
+        // CU-20 (Observer): el cliente queda suscripto antes de la transicion
+        // Pendiente -> Pagado para recibir la notificacion del pago exitoso.
+        suscribirCanalesDelCliente(pedido);
         pedido.avanzarEstado();
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         vaciarCarrito(clienteId);
         return new ProcesarPagoResponse(true, resultadoPago.mensaje(), PedidoResponse.from(pedidoGuardado));
+    }
+
+    // Observer (CU-20/23/24): traduce las preferencias del cliente en canales
+    // concretos y los suscribe al pedido (Sujeto observable) antes de notificar.
+    private void suscribirCanalesDelCliente(Pedido pedido) {
+        Usuario usuario = usuarioRepository.findById(pedido.getClienteId()).orElse(null);
+        if (usuario instanceof Cliente cliente) {
+            cliente.canalesNotificacionHabilitados().forEach(pedido::suscribir);
+        }
     }
 
     private boolean hayStockDisponible(Pedido pedido) {

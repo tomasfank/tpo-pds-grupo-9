@@ -3,6 +3,8 @@ package com.riva.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,11 +31,14 @@ import com.riva.model.pedido.Pedido;
 import com.riva.model.product.Product;
 import com.riva.model.product.ProductVariant;
 import com.riva.model.product.Size;
+import com.riva.model.user.Cliente;
+import com.riva.pattern.notification.CanalNotificacion;
 import com.riva.pattern.payment.MetodoPagoFactory;
 import com.riva.pattern.state.EstadoPagado;
 import com.riva.repository.CarritoRepository;
 import com.riva.repository.PedidoRepository;
 import com.riva.repository.ProductRepository;
+import com.riva.repository.UsuarioRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PedidoServiceTest {
@@ -46,6 +51,9 @@ class PedidoServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private UsuarioRepository usuarioRepository;
 
     @Spy
     private MetodoPagoFactory metodoPagoFactory = new MetodoPagoFactory();
@@ -212,6 +220,59 @@ class PedidoServiceTest {
         assertThatThrownBy(() -> pedidoService.procesarPago("cliente-1", "pedido-1", requestTarjeta("4111111111111111")))
                 .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("Solo se pueden pagar pedidos pendientes");
+    }
+
+    @Test
+    void avanzarEstadoSuscribeLosCanalesHabilitadosDelClienteAntesDeNotificar() {
+        Pedido pedido = spy(new Pedido("cliente-1", List.of(itemPedido()), null));
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(usuarioRepository.findById("cliente-1")).thenReturn(Optional.of(cliente(true, true, true)));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Pedido actualizado = pedidoService.avanzarEstado("pedido-1");
+
+        // Observer: los 3 canales habilitados quedan suscriptos al pedido y la
+        // transicion (que dispara notificar()) se completa.
+        verify(pedido, times(3)).suscribir(any(CanalNotificacion.class));
+        assertThat(actualizado.nombreEstadoActual()).isEqualTo("Pagado");
+    }
+
+    @Test
+    void avanzarEstadoSoloSuscribeLosCanalesQueElClienteDejoHabilitados() {
+        Pedido pedido = spy(new Pedido("cliente-1", List.of(itemPedido()), null));
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(usuarioRepository.findById("cliente-1")).thenReturn(Optional.of(cliente(true, false, false)));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        pedidoService.avanzarEstado("pedido-1");
+
+        verify(pedido, times(1)).suscribir(any(CanalNotificacion.class));
+    }
+
+    @Test
+    void procesarPagoExitosoSuscribeLosCanalesDelClienteParaNotificarElPago() {
+        Pedido pedido = spy(new Pedido("cliente-1", List.of(itemPedido()), null));
+        Product product = productoConStock(4);
+        Carrito carrito = carritoConItem("cliente-1");
+        when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));
+        when(usuarioRepository.findById("cliente-1")).thenReturn(Optional.of(cliente(true, true, true)));
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(carritoRepository.findByClienteId("cliente-1")).thenReturn(Optional.of(carrito));
+        when(carritoRepository.save(any(Carrito.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProcesarPagoResponse response = pedidoService.procesarPago(
+                "cliente-1", "pedido-1", requestTarjeta("4111111111111111"));
+
+        assertThat(response.exito()).isTrue();
+        verify(pedido, times(3)).suscribir(any(CanalNotificacion.class));
+    }
+
+    private static Cliente cliente(boolean email, boolean sms, boolean push) {
+        Cliente cliente = new Cliente("Cliente", "Demo", "cliente@riva.com", "hash");
+        cliente.configurarNotificaciones(email, sms, push);
+        return cliente;
     }
 
     private static Carrito carritoConItem(String clienteId) {
