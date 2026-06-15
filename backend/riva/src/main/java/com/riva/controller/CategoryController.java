@@ -23,7 +23,8 @@ import com.riva.service.CategoryService;
 import jakarta.validation.Valid;
 
 // CU-13 — endpoints administrativos para gestionar la jerarquía de categorías.
-// TODO(auth): restringir a rol Administrador cuando se implemente CU-03 + JWT.
+// Las mutaciones (POST/PUT/DELETE) quedan restringidas a ROLE_ADMINISTRADOR en SecurityConfig;
+// el GET del árbol es público.
 @RestController
 @RequestMapping("/api/categories")
 public class CategoryController {

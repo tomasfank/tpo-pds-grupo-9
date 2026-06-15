@@ -95,7 +95,67 @@ export type Order = {
   direccionEnvio: ShippingAddress | null
 }
 
-export type ViewName = 'home' | 'category' | 'product' | 'cart' | 'orders'
+export type ViewName =
+  | 'home'
+  | 'category'
+  | 'product'
+  | 'cart'
+  | 'orders'
+  | 'admin-login'
+  | 'admin-products'
+  | 'admin-categories'
+
+// CU-13 — categoria plana (nodo del arbol) tal como la expone el backend para administracion.
+export type Category = {
+  id: string
+  name: string
+  active: boolean
+  parentId: string | null
+  ancestorIds: string[]
+}
+
+export type Rol = 'CLIENTE' | 'ADMINISTRADOR'
+
+export type AuthSession = {
+  token: string
+  rol: Rol
+  nombre: string
+  apellido: string
+  email: string
+}
+
+export type ProductVariantInput = {
+  id?: string
+  size: Size | ''
+  color: string
+  stock: number
+}
+
+export type ProductVariantPayload = {
+  id?: string | null
+  size: Size | null
+  color: string | null
+  stock: number
+}
+
+export type CreateProductPayload = {
+  name: string
+  description: string
+  price: number
+  material: string
+  categoryId: string
+  imageUrls: string[]
+  variants: ProductVariantPayload[]
+}
+
+// CU-11 — la edicion reenvia el mismo set de campos; el backend solo aplica los no-null.
+export type UpdateProductPayload = CreateProductPayload
+
+export type CategoryOption = {
+  id: string
+  name: string
+  depth: number
+}
 
 export type PaymentMethod = 'TARJETA' | 'PAYPAL' | 'TRANSFERENCIA'
 

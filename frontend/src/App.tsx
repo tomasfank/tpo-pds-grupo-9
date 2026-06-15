@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
+import { isAxiosError } from 'axios'
 import './App.css'
 import {
   addCartItem,
@@ -8,10 +10,13 @@ import {
   updateCartItem,
 } from './api/cart'
 import {
+  createProduct,
+  deactivateProduct,
   getCatalogTree,
   getProduct,
   getProducts,
   getProductsByCategory,
+  updateProduct,
 } from './api/products'
 import {
   advanceOrder,
@@ -20,17 +25,87 @@ import {
   processOrderPayment,
   updateOrderShippingAddress,
 } from './api/orders'
+import {
+  clearSession,
+  getSession,
+  login as loginRequest,
+  logout as logoutRequest,
+  setSession,
+} from './api/auth'
+import {
+  activateCategory,
+  createCategory,
+  deactivateCategory,
+  getAllCategories,
+  moveCategory,
+  renameCategory,
+} from './api/categories'
 import type {
+  AuthSession,
   Cart,
+  Category,
+  CategoryOption,
   CategoryTreeNode,
+  CreateProductPayload,
   Order,
   PaymentRequest,
   Product,
   ProductFilters,
+  ProductVariantInput,
   ShippingAddress,
   Size,
+  UpdateProductPayload,
   ViewName,
 } from './types'
+
+function extractApiMessage(error: unknown, fallback: string): string {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string } | undefined
+    if (data?.message) {
+      return data.message
+    }
+  }
+  return fallback
+}
+
+function flattenCategories(
+  nodes: CategoryTreeNode[],
+  depth = 0,
+  acc: CategoryOption[] = [],
+): CategoryOption[] {
+  for (const node of nodes) {
+    if (node.active) {
+      acc.push({ id: node.id, name: node.name, depth })
+      flattenCategories(node.children, depth + 1, acc)
+    }
+  }
+  return acc
+}
+
+// CU-13 — ordena la lista plana de categorias como un recorrido DFS del arbol,
+// anotando la profundidad para indentar la vista (patron Composite).
+function orderCategoryTree(categories: Category[]): { category: Category; depth: number }[] {
+  const byParent = new Map<string | null, Category[]>()
+  for (const category of categories) {
+    const key = category.parentId ?? null
+    const siblings = byParent.get(key) ?? []
+    siblings.push(category)
+    byParent.set(key, siblings)
+  }
+  for (const siblings of byParent.values()) {
+    siblings.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  const result: { category: Category; depth: number }[] = []
+  const walk = (parentId: string | null, depth: number) => {
+    for (const category of byParent.get(parentId) ?? []) {
+      result.push({ category, depth })
+      walk(category.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  return result
+}
 
 const pesoFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -53,6 +128,7 @@ type RouteState = {
 
 function App() {
   const [route, setRoute] = useState<RouteState>({ view: 'home' })
+  const [session, setSessionState] = useState<AuthSession | null>(() => getSession())
   const [categories, setCategories] = useState<CategoryTreeNode[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -67,6 +143,15 @@ function App() {
   const [cartError, setCartError] = useState('')
   const [ordersError, setOrdersError] = useState('')
   const [ordersMessage, setOrdersMessage] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [adminError, setAdminError] = useState('')
+  const [adminMessage, setAdminMessage] = useState('')
+  const [isAdminLoading, setIsAdminLoading] = useState(false)
+  const [adminCategories, setAdminCategories] = useState<Category[]>([])
+  const [catError, setCatError] = useState('')
+  const [catMessage, setCatMessage] = useState('')
+  const [isCatLoading, setIsCatLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -367,11 +452,192 @@ function App() {
     void loadOrders()
   }
 
+  // CU-03 — Iniciar Sesion como Administrador.
+  async function handleAdminLogin(email: string, password: string) {
+    try {
+      setIsAuthLoading(true)
+      setAuthError('')
+      const nextSession = await loginRequest(email, password)
+      // CU-03 flujo alternativo 3a: si el rol no es Administrador, se rechaza el acceso admin.
+      if (nextSession.rol !== 'ADMINISTRADOR') {
+        setAuthError('Esta cuenta no tiene acceso al panel de administracion.')
+        return
+      }
+      setSession(nextSession)
+      setSessionState(nextSession)
+      navigate({ view: 'admin-products' })
+    } catch (error) {
+      // CU-03 flujo alternativo 2a: error generico, sin distinguir email de contrasena.
+      setAuthError(extractApiMessage(error, 'Email o contrasena incorrectos.'))
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  // CU-04 — Cerrar Sesion.
+  async function handleLogout() {
+    await logoutRequest()
+    clearSession()
+    setSessionState(null)
+    setAdminMessage('')
+    setAdminError('')
+    navigate({ view: 'home' })
+  }
+
+  // CU-10 — Crear Producto.
+  async function handleCreateProduct(payload: CreateProductPayload): Promise<boolean> {
+    try {
+      setIsAdminLoading(true)
+      setAdminError('')
+      setAdminMessage('')
+      const created = await createProduct(payload)
+      setProducts((current) => [created, ...current.filter((item) => item.id !== created.id)])
+      setAdminMessage(`Producto "${created.name}" creado y publicado en el catalogo.`)
+      return true
+    } catch (error) {
+      setAdminError(extractApiMessage(error, 'No pudimos crear el producto. Revisa los datos.'))
+      return false
+    } finally {
+      setIsAdminLoading(false)
+    }
+  }
+
+  // CU-11 — Editar Producto.
+  async function handleUpdateProduct(
+    productId: string,
+    payload: UpdateProductPayload,
+  ): Promise<boolean> {
+    try {
+      setIsAdminLoading(true)
+      setAdminError('')
+      setAdminMessage('')
+      const updated = await updateProduct(productId, payload)
+      setProducts((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      setAdminMessage(`Producto "${updated.name}" actualizado.`)
+      return true
+    } catch (error) {
+      setAdminError(extractApiMessage(error, 'No pudimos actualizar el producto. Revisa los datos.'))
+      return false
+    } finally {
+      setIsAdminLoading(false)
+    }
+  }
+
+  // CU-12 — Desactivar Producto.
+  async function handleDeactivateProduct(productId: string): Promise<boolean> {
+    try {
+      setIsAdminLoading(true)
+      setAdminError('')
+      setAdminMessage('')
+      const deactivated = await deactivateProduct(productId)
+      // Sale del catalogo activo; permanece referenciable desde pedidos historicos.
+      setProducts((current) => current.filter((item) => item.id !== deactivated.id))
+      setAdminMessage(`Producto "${deactivated.name}" desactivado. Ya no es visible en el catalogo.`)
+      return true
+    } catch (error) {
+      setAdminError(extractApiMessage(error, 'No pudimos desactivar el producto.'))
+      return false
+    } finally {
+      setIsAdminLoading(false)
+    }
+  }
+
+  function navigateToAdmin() {
+    if (session?.rol === 'ADMINISTRADOR') {
+      navigate({ view: 'admin-products' })
+    } else {
+      setAuthError('')
+      navigate({ view: 'admin-login' })
+    }
+  }
+
+  // CU-13 — Gestionar Categorias y Subcategorias.
+  async function loadAdminCategories() {
+    try {
+      setIsCatLoading(true)
+      setCatError('')
+      const data = await getAllCategories()
+      setAdminCategories(data)
+    } catch {
+      setCatError('No pudimos cargar las categorias.')
+    } finally {
+      setIsCatLoading(false)
+    }
+  }
+
+  function navigateToAdminCategories() {
+    if (session?.rol === 'ADMINISTRADOR') {
+      navigate({ view: 'admin-categories' })
+      void loadAdminCategories()
+    } else {
+      setAuthError('')
+      navigate({ view: 'admin-login' })
+    }
+  }
+
+  // Tras mutar la jerarquia refrescamos tanto la lista admin como el arbol publico del
+  // catalogo (del que sale el selector de categorias del alta de producto).
+  async function refreshCategoriesAfterMutation() {
+    await loadAdminCategories()
+    try {
+      const tree = await getCatalogTree()
+      setCategories(tree)
+    } catch {
+      // El arbol publico se reintenta en la proxima carga; no bloquea la gestion admin.
+    }
+  }
+
+  async function runCategoryMutation(action: () => Promise<unknown>, successMessage: string) {
+    try {
+      setIsCatLoading(true)
+      setCatError('')
+      setCatMessage('')
+      await action()
+      await refreshCategoriesAfterMutation()
+      setCatMessage(successMessage)
+      return true
+    } catch (error) {
+      setCatError(extractApiMessage(error, 'No pudimos completar la operacion sobre la categoria.'))
+      return false
+    } finally {
+      setIsCatLoading(false)
+    }
+  }
+
+  function handleCreateCategory(name: string, parentId: string | null) {
+    return runCategoryMutation(
+      () => createCategory(name, parentId),
+      `Categoria "${name}" creada.`,
+    )
+  }
+
+  function handleRenameCategory(id: string, name: string) {
+    return runCategoryMutation(() => renameCategory(id, name), 'Categoria renombrada.')
+  }
+
+  function handleMoveCategory(id: string, parentId: string | null) {
+    // El backend valida ciclos (categoria destino dentro del subarbol) y devuelve el error.
+    return runCategoryMutation(() => moveCategory(id, parentId), 'Categoria reubicada.')
+  }
+
+  function handleDeactivateCategory(id: string) {
+    // El backend impide desactivar si hay productos activos en el subarbol (flujo alternativo 6a).
+    return runCategoryMutation(() => deactivateCategory(id), 'Categoria desactivada.')
+  }
+
+  function handleActivateCategory(id: string) {
+    return runCategoryMutation(() => activateCategory(id), 'Categoria activada.')
+  }
+
   const currentCategory = route.categoryId
     ? findCategory(categories, route.categoryId)
     : undefined
   const featuredProducts = useMemo(() => products.slice(0, 4), [products])
+  const categoryOptions = useMemo(() => flattenCategories(categories), [categories])
   const cartItemsCount = cart?.items.reduce((total, item) => total + item.cantidad, 0) ?? 0
+  const isAdmin = session?.rol === 'ADMINISTRADOR'
 
   return (
     <div className="store-shell">
@@ -401,6 +667,23 @@ function App() {
         <button className="cart-link" type="button" onClick={navigateToOrders}>
           Pedidos
         </button>
+        {isAdmin ? (
+          <>
+            <button className="cart-link" type="button" onClick={navigateToAdmin}>
+              Productos
+            </button>
+            <button className="cart-link" type="button" onClick={navigateToAdminCategories}>
+              Categorias
+            </button>
+            <button className="cart-link ghost-button" type="button" onClick={handleLogout}>
+              Salir
+            </button>
+          </>
+        ) : (
+          <button className="cart-link" type="button" onClick={navigateToAdmin}>
+            Admin
+          </button>
+        )}
       </header>
 
       <main>
@@ -483,6 +766,70 @@ function App() {
             onContinueShopping={() => navigate({ view: 'home' })}
           />
         )}
+
+        {route.view === 'admin-login' &&
+          (isAdmin ? (
+            <EmptyState
+              eyebrow="Sesion activa"
+              title="Ya iniciaste sesion como administrador"
+              description="Acceci al panel para gestionar el catalogo de productos."
+              actionLabel="Ir al panel admin"
+              onAction={() => navigate({ view: 'admin-products' })}
+            />
+          ) : (
+            <AdminLoginView
+              isLoading={isAuthLoading}
+              error={authError}
+              onLogin={handleAdminLogin}
+            />
+          ))}
+
+        {route.view === 'admin-products' &&
+          (isAdmin ? (
+            <AdminProductsView
+              session={session}
+              products={products}
+              categoryOptions={categoryOptions}
+              isLoading={isAdminLoading}
+              message={adminMessage}
+              error={adminError}
+              onCreateProduct={handleCreateProduct}
+              onUpdateProduct={handleUpdateProduct}
+              onDeactivateProduct={handleDeactivateProduct}
+            />
+          ) : (
+            <EmptyState
+              eyebrow="Acceso restringido"
+              title="Necesitas iniciar sesion como administrador"
+              description="El panel de gestion de productos solo esta disponible para administradores."
+              actionLabel="Ir al login admin"
+              onAction={() => navigate({ view: 'admin-login' })}
+            />
+          ))}
+
+        {route.view === 'admin-categories' &&
+          (isAdmin ? (
+            <AdminCategoriesView
+              categories={adminCategories}
+              isLoading={isCatLoading}
+              message={catMessage}
+              error={catError}
+              onRefresh={loadAdminCategories}
+              onCreate={handleCreateCategory}
+              onRename={handleRenameCategory}
+              onMove={handleMoveCategory}
+              onDeactivate={handleDeactivateCategory}
+              onActivate={handleActivateCategory}
+            />
+          ) : (
+            <EmptyState
+              eyebrow="Acceso restringido"
+              title="Necesitas iniciar sesion como administrador"
+              description="La gestion de categorias solo esta disponible para administradores."
+              actionLabel="Ir al login admin"
+              onAction={() => navigate({ view: 'admin-login' })}
+            />
+          ))}
       </main>
     </div>
   )
@@ -1307,6 +1654,640 @@ function OrderCard({
         </div>
       )}
     </article>
+  )
+}
+
+type AdminLoginViewProps = {
+  isLoading: boolean
+  error: string
+  onLogin: (email: string, password: string) => Promise<void>
+}
+
+function AdminLoginView({ isLoading, error, onLogin }: AdminLoginViewProps) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const canSubmit = email.trim() !== '' && password.trim() !== ''
+
+  return (
+    <section className="admin-auth">
+      <div className="view-heading">
+        <p className="eyebrow">Administracion</p>
+        <h1>Iniciar sesion</h1>
+        <p>Acceso al panel de gestion del catalogo. Solo administradores.</p>
+      </div>
+
+      <form
+        className="order-form admin-login-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (canSubmit && !isLoading) {
+            void onLogin(email.trim(), password)
+          }
+        }}
+      >
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="admin@riva.com"
+          />
+        </label>
+        <label>
+          Contrasena
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="********"
+          />
+        </label>
+        <button type="submit" disabled={!canSubmit || isLoading}>
+          {isLoading ? 'Ingresando...' : 'Ingresar'}
+        </button>
+        {error && <p className="status-text is-error">{error}</p>}
+      </form>
+    </section>
+  )
+}
+
+type AdminProductsViewProps = {
+  session: AuthSession | null
+  products: Product[]
+  categoryOptions: CategoryOption[]
+  isLoading: boolean
+  message: string
+  error: string
+  onCreateProduct: (payload: CreateProductPayload) => Promise<boolean>
+  onUpdateProduct: (productId: string, payload: UpdateProductPayload) => Promise<boolean>
+  onDeactivateProduct: (productId: string) => Promise<boolean>
+}
+
+const emptyVariant: ProductVariantInput = { size: '', color: '', stock: 0 }
+
+function AdminProductsView({
+  session,
+  products,
+  categoryOptions,
+  isLoading,
+  message,
+  error,
+  onCreateProduct,
+  onUpdateProduct,
+  onDeactivateProduct,
+}: AdminProductsViewProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [price, setPrice] = useState('')
+  const [material, setMaterial] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [imageUrls, setImageUrls] = useState<string[]>([''])
+  const [variants, setVariants] = useState<ProductVariantInput[]>([{ ...emptyVariant }])
+  const [formError, setFormError] = useState('')
+
+  function updateVariant(index: number, patch: Partial<ProductVariantInput>) {
+    setVariants((current) =>
+      current.map((variant, i) => (i === index ? { ...variant, ...patch } : variant)),
+    )
+  }
+
+  function resetForm() {
+    setEditingId(null)
+    setName('')
+    setDescription('')
+    setPrice('')
+    setMaterial('')
+    setCategoryId('')
+    setImageUrls([''])
+    setVariants([{ ...emptyVariant }])
+    setFormError('')
+  }
+
+  // CU-11 — carga el producto seleccionado en el formulario para editarlo.
+  function startEdit(product: Product) {
+    setEditingId(product.id)
+    setName(product.name)
+    setDescription(product.description)
+    setPrice(String(product.price))
+    setMaterial(product.material)
+    setCategoryId(product.categoryId)
+    setImageUrls(product.imageUrls.length > 0 ? [...product.imageUrls] : [''])
+    setVariants(
+      product.variants.length > 0
+        ? product.variants.map((variant) => ({
+            id: variant.id,
+            size: variant.size ?? '',
+            color: variant.color ?? '',
+            stock: variant.stock,
+          }))
+        : [{ ...emptyVariant }],
+    )
+    setFormError('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // CU-12 — solicita confirmacion antes de desactivar (flujo principal paso 3;
+  // si el admin cancela, el producto permanece activo — flujo alternativo 3a).
+  function handleDeactivate(product: Product) {
+    const confirmed = window.confirm(
+      `Desactivar "${product.name}"? Dejara de verse en el catalogo publico.`,
+    )
+    if (!confirmed) {
+      return
+    }
+    void onDeactivateProduct(product.id).then((ok) => {
+      if (ok && product.id === editingId) {
+        resetForm()
+      }
+    })
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setFormError('')
+
+    const pricevalue = Number(price)
+    if (!name.trim() || !description.trim() || !material.trim() || !categoryId) {
+      setFormError('Completa nombre, descripcion, material y categoria.')
+      return
+    }
+    if (!Number.isFinite(pricevalue) || pricevalue <= 0) {
+      setFormError('El precio debe ser un numero mayor a cero.')
+      return
+    }
+    // CU-10 / CU-11: cada variante debe definir al menos talla o color (regla del backend).
+    // Al editar se conserva el id de la variante para mantener su identidad.
+    const cleanVariants = variants
+      .map((variant) => ({
+        ...(variant.id ? { id: variant.id } : {}),
+        size: variant.size === '' ? null : variant.size,
+        color: variant.color.trim() === '' ? null : variant.color.trim(),
+        stock: Number.isFinite(variant.stock) ? Math.max(0, Math.trunc(variant.stock)) : 0,
+      }))
+      .filter((variant) => variant.size !== null || variant.color !== null)
+    if (cleanVariants.length === 0) {
+      setFormError('Agrega al menos una variante con talla o color.')
+      return
+    }
+
+    const payload: CreateProductPayload = {
+      name: name.trim(),
+      description: description.trim(),
+      price: pricevalue,
+      material: material.trim(),
+      categoryId,
+      imageUrls: imageUrls.map((url) => url.trim()).filter((url) => url !== ''),
+      variants: cleanVariants,
+    }
+
+    const success = editingId
+      ? await onUpdateProduct(editingId, payload)
+      : await onCreateProduct(payload)
+    if (success) {
+      resetForm()
+    }
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="view-heading">
+        <p className="eyebrow">Gestion de productos</p>
+        <h1>Panel de administracion</h1>
+        <p>
+          Sesion: {session?.nombre} {session?.apellido} ({session?.email}). Alta de productos del
+          catalogo (CU-10).
+        </p>
+      </div>
+
+      <div className="admin-layout">
+        <form className="order-form admin-product-form" onSubmit={handleSubmit}>
+          <h2>{editingId ? 'Editar producto' : 'Crear producto'}</h2>
+          <label>
+            Nombre
+            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
+          </label>
+          <label>
+            Descripcion
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={2000}
+              rows={3}
+            />
+          </label>
+          <div className="admin-form-row">
+            <label>
+              Precio
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+              />
+            </label>
+            <label>
+              Material
+              <input
+                value={material}
+                onChange={(event) => setMaterial(event.target.value)}
+                maxLength={200}
+              />
+            </label>
+          </div>
+          <label>
+            Categoria
+            <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+              <option value="">Seleccionar categoria</option>
+              {categoryOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {`${'  '.repeat(option.depth)}${option.name}`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="admin-subform">
+            <div className="admin-subform-head">
+              <p>Imagenes (URLs)</p>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setImageUrls((current) => [...current, ''])}
+              >
+                + Agregar imagen
+              </button>
+            </div>
+            {imageUrls.map((url, index) => (
+              <div className="admin-form-inline" key={`image-${index}`}>
+                <input
+                  placeholder="https://..."
+                  value={url}
+                  onChange={(event) =>
+                    setImageUrls((current) =>
+                      current.map((item, i) => (i === index ? event.target.value : item)),
+                    )
+                  }
+                />
+                {imageUrls.length > 1 && (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setImageUrls((current) => current.filter((_, i) => i !== index))
+                    }
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="admin-subform">
+            <div className="admin-subform-head">
+              <p>Variantes (talla / color / stock)</p>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setVariants((current) => [...current, { ...emptyVariant }])}
+              >
+                + Agregar variante
+              </button>
+            </div>
+            {variants.map((variant, index) => (
+              <div className="admin-variant-row" key={`variant-${index}`}>
+                <select
+                  aria-label="Talla"
+                  value={variant.size}
+                  onChange={(event) =>
+                    updateVariant(index, { size: event.target.value as Size | '' })
+                  }
+                >
+                  <option value="">Sin talla</option>
+                  {sizes.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label="Color"
+                  placeholder="Color"
+                  value={variant.color}
+                  onChange={(event) => updateVariant(index, { color: event.target.value })}
+                />
+                <input
+                  aria-label="Stock"
+                  type="number"
+                  min="0"
+                  value={variant.stock}
+                  onChange={(event) =>
+                    updateVariant(index, { stock: Number(event.target.value) })
+                  }
+                />
+                {variants.length > 1 && (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setVariants((current) => current.filter((_, i) => i !== index))
+                    }
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="admin-form-actions">
+            <button type="submit" disabled={isLoading}>
+              {isLoading
+                ? editingId
+                  ? 'Guardando...'
+                  : 'Creando...'
+                : editingId
+                  ? 'Guardar cambios'
+                  : 'Crear producto'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={isLoading}
+                onClick={resetForm}
+              >
+                Cancelar edicion
+              </button>
+            )}
+          </div>
+          {formError && <p className="status-text is-error">{formError}</p>}
+          {error && <p className="status-text is-error">{error}</p>}
+          {message && <p className="status-text">{message}</p>}
+        </form>
+
+        <aside className="admin-product-list" aria-label="Productos del catalogo">
+          <h2>Catalogo actual ({products.length})</h2>
+          {products.length === 0 ? (
+            <p className="status-text">Todavia no hay productos cargados.</p>
+          ) : (
+            <ul>
+              {products.map((product) => (
+                <li
+                  key={product.id}
+                  className={product.id === editingId ? 'is-editing' : undefined}
+                >
+                  <strong>{product.name}</strong>
+                  <span>{pesoFormatter.format(product.price)}</span>
+                  <small>
+                    {product.variants.length} variantes ·{' '}
+                    {product.variants.reduce((total, variant) => total + variant.stock, 0)} en stock
+                  </small>
+                  <div className="admin-item-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={isLoading}
+                      onClick={() => startEdit(product)}
+                    >
+                      {product.id === editingId ? 'Editando...' : 'Editar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button danger"
+                      disabled={isLoading}
+                      onClick={() => handleDeactivate(product)}
+                    >
+                      Desactivar
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
+    </section>
+  )
+}
+
+type AdminCategoriesViewProps = {
+  categories: Category[]
+  isLoading: boolean
+  message: string
+  error: string
+  onRefresh: () => Promise<void>
+  onCreate: (name: string, parentId: string | null) => Promise<boolean>
+  onRename: (id: string, name: string) => Promise<boolean>
+  onMove: (id: string, parentId: string | null) => Promise<boolean>
+  onDeactivate: (id: string) => Promise<boolean>
+  onActivate: (id: string) => Promise<boolean>
+}
+
+function AdminCategoriesView({
+  categories,
+  isLoading,
+  message,
+  error,
+  onRefresh,
+  onCreate,
+  onRename,
+  onMove,
+  onDeactivate,
+  onActivate,
+}: AdminCategoriesViewProps) {
+  const [newName, setNewName] = useState('')
+  const [newParentId, setNewParentId] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+
+  const ordered = useMemo(() => orderCategoryTree(categories), [categories])
+
+  async function handleCreate(event: FormEvent) {
+    event.preventDefault()
+    if (!newName.trim()) {
+      return
+    }
+    const success = await onCreate(newName.trim(), newParentId || null)
+    if (success) {
+      setNewName('')
+      setNewParentId('')
+    }
+  }
+
+  async function handleRenameSubmit(id: string) {
+    if (!editingName.trim()) {
+      return
+    }
+    const success = await onRename(id, editingName.trim())
+    if (success) {
+      setEditingId(null)
+      setEditingName('')
+    }
+  }
+
+  function handleDeactivate(category: Category) {
+    const confirmed = window.confirm(
+      `Desactivar la categoria "${category.name}"? Solo es posible si no tiene productos activos en el subarbol.`,
+    )
+    if (confirmed) {
+      void onDeactivate(category.id)
+    }
+  }
+
+  // Candidatos validos como nuevo padre: cualquier categoria que no sea la propia ni un
+  // descendiente (su ancestorIds no debe contener el id del nodo). Evita ciclos obvios en la UI;
+  // el backend valida igualmente.
+  function parentOptionsFor(category: Category) {
+    return ordered.filter(
+      ({ category: candidate }) =>
+        candidate.id !== category.id && !candidate.ancestorIds.includes(category.id),
+    )
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="view-heading">
+        <p className="eyebrow">Gestion de categorias</p>
+        <h1>Categorias y subcategorias</h1>
+        <p>Arbol del catalogo (patron Composite). Alta, renombrado, reubicacion y baja (CU-13).</p>
+      </div>
+
+      <form className="order-form admin-product-form" onSubmit={handleCreate}>
+        <h2>Crear categoria</h2>
+        <label>
+          Nombre
+          <input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} />
+        </label>
+        <label>
+          Categoria padre
+          <select value={newParentId} onChange={(event) => setNewParentId(event.target.value)}>
+            <option value="">(raiz / sin padre)</option>
+            {ordered.map(({ category, depth }) => (
+              <option key={category.id} value={category.id}>
+                {`${'  '.repeat(depth)}${category.name}`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={isLoading || !newName.trim()}>
+          {isLoading ? 'Guardando...' : 'Crear categoria'}
+        </button>
+      </form>
+
+      <div className="admin-subform">
+        <div className="admin-subform-head">
+          <p>Arbol de categorias ({categories.length})</p>
+          <button type="button" className="ghost-button" disabled={isLoading} onClick={onRefresh}>
+            Actualizar
+          </button>
+        </div>
+
+        {error && <p className="status-text is-error">{error}</p>}
+        {message && <p className="status-text">{message}</p>}
+        {isLoading && <p className="status-text">Actualizando categorias...</p>}
+
+        {ordered.length === 0 && !isLoading ? (
+          <p className="status-text">Todavia no hay categorias. Crea la primera arriba.</p>
+        ) : (
+          <ul className="admin-category-tree">
+            {ordered.map(({ category, depth }) => (
+              <li
+                key={category.id}
+                className={category.active ? 'admin-category-node' : 'admin-category-node is-inactive'}
+                style={{ paddingLeft: `${depth * 22}px` }}
+              >
+                {editingId === category.id ? (
+                  <div className="admin-category-rename">
+                    <input
+                      value={editingName}
+                      maxLength={80}
+                      onChange={(event) => setEditingName(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      disabled={isLoading || !editingName.trim()}
+                      onClick={() => handleRenameSubmit(category.id)}
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => {
+                        setEditingId(null)
+                        setEditingName('')
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="admin-category-row">
+                    <span className="admin-category-name">
+                      {category.name}
+                      {!category.active && <small> (inactiva)</small>}
+                    </span>
+                    <div className="admin-category-actions">
+                      <label className="admin-category-move">
+                        Mover a:
+                        <select
+                          value={category.parentId ?? ''}
+                          disabled={isLoading}
+                          onChange={(event) => onMove(category.id, event.target.value || null)}
+                        >
+                          <option value="">(raiz)</option>
+                          {parentOptionsFor(category).map(({ category: option, depth: optionDepth }) => (
+                            <option key={option.id} value={option.id}>
+                              {`${'  '.repeat(optionDepth)}${option.name}`}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={isLoading}
+                        onClick={() => {
+                          setEditingId(category.id)
+                          setEditingName(category.name)
+                        }}
+                      >
+                        Renombrar
+                      </button>
+                      {category.active ? (
+                        <button
+                          type="button"
+                          className="ghost-button danger"
+                          disabled={isLoading}
+                          onClick={() => handleDeactivate(category)}
+                        >
+                          Desactivar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={isLoading}
+                          onClick={() => onActivate(category.id)}
+                        >
+                          Activar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   )
 }
 

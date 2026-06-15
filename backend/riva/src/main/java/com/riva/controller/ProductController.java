@@ -26,7 +26,7 @@ import com.riva.service.ProductService;
 import jakarta.validation.Valid;
 
 // CU-09 (detalle público) + CU-10/11/12 (admin).
-// TODO(auth): POST/PUT/DELETE deben requerir rol Administrador cuando entre JWT.
+// POST/PUT/DELETE quedan restringidos a ROLE_ADMINISTRADOR en SecurityConfig.
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {

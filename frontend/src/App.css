@@ -937,3 +937,249 @@ h3 {
     grid-column: 1 / -1;
   }
 }
+
+/* CU-03 / CU-10 — login y panel de administracion */
+.admin-auth,
+.admin-panel {
+  padding: clamp(42px, 5vw, 64px) clamp(18px, 4vw, 56px);
+  display: grid;
+  gap: 24px;
+}
+
+.order-form.admin-login-form,
+.order-form.admin-product-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.order-form.admin-login-form {
+  max-width: 420px;
+}
+
+.order-form.admin-login-form label,
+.order-form.admin-product-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.order-form.admin-product-form h2,
+.admin-product-list h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.order-form textarea {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  padding: 9px 11px;
+  color: var(--ink);
+  background: var(--white);
+  font: inherit;
+  resize: vertical;
+}
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.admin-subform {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.admin-subform-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-subform-head p {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.admin-form-inline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.admin-variant-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.6fr) 1fr minmax(80px, 0.5fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.8fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.admin-panel input,
+.admin-panel select,
+.admin-panel textarea,
+.admin-auth input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  padding: 9px 11px;
+  color: var(--ink);
+  background: var(--white);
+  font: inherit;
+}
+
+.admin-auth button,
+.admin-panel button {
+  min-height: 42px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: var(--white);
+  background: var(--accent);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-auth button:disabled,
+.admin-panel button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-panel .ghost-button {
+  color: var(--ink);
+  border-color: var(--line);
+  background: transparent;
+}
+
+.admin-product-list {
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.admin-product-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-product-list li {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-product-list li strong {
+  color: var(--ink);
+}
+
+.admin-product-list li small {
+  color: var(--muted);
+}
+
+.admin-product-list li.is-editing {
+  border-bottom-color: var(--accent);
+}
+
+.admin-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.admin-panel .ghost-button.danger {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.admin-category-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-category-node {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-category-node.is-inactive .admin-category-name {
+  color: var(--muted);
+}
+
+.admin-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-category-name {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.admin-category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-category-move {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.admin-category-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 860px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-variant-row,
+  .admin-form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

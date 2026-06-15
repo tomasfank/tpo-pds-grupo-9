@@ -49,7 +49,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-03 |
-| Estado de implementacion | DONE (backend) - El mismo `POST /api/auth/login` autentica administradores (rol `ADMINISTRADOR`, provisionado vía `DataSeeder`). Los endpoints admin (productos, categorías, `POST /api/orders/{id}/advance`) quedan restringidos a `ROLE_ADMINISTRADOR` en `SecurityConfig`. La separación de pantallas Cliente/Admin es del frontend. |
+| Estado de implementacion | DONE - El mismo `POST /api/auth/login` autentica administradores (rol `ADMINISTRADOR`, provisionado vía `DataSeeder`). Los endpoints admin (productos, categorías, `POST /api/orders/{id}/advance`) quedan restringidos a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Frontend: `AdminLoginView` (vista de login admin) valida el rol `ADMINISTRADOR` del lado del cliente (rechaza otros roles — flujo alternativo 3a), persiste el JWT en `localStorage` (`api/auth.ts`) y redirige al panel; el header expone los botones Admin/Salir (logout vía CU-04). |
 | Nombre | Iniciar Sesión como Administrador |
 | Actor principal | Administrador |
 | Precondiciones | El usuario posee una cuenta activa con rol Administrador previamente provisionada en el sistema. El usuario no tiene una sesión activa. |
@@ -168,7 +168,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-10 |
-| Estado de implementacion | PARCIAL - Backend permite crear productos con variantes y validaciones basicas, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig` (CU-03 implementado). Falta el panel administrativo en frontend. |
+| Estado de implementacion | DONE - Backend permite crear productos con variantes y validaciones basicas, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Frontend: `AdminProductsView` (panel admin protegido) ofrece el formulario de alta — nombre, descripción, precio, material, selector de categoría (árbol Composite aplanado), lista dinámica de imágenes y de variantes (talla/color/stock) — que postea a `POST /api/products` con el JWT (interceptor en `api/products.ts`). Valida la regla "cada variante define al menos talla o color" del lado del cliente y muestra los mensajes de error del backend; el producto creado aparece en el listado del panel y en el catálogo público. |
 | Nombre | Crear Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos una categoría donde ubicar el producto (CU-13). |
@@ -185,7 +185,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-11 |
-| Estado de implementacion | PARCIAL - Backend permite editar productos, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta la UI administrativa. |
+| Estado de implementacion | DONE - Backend permite editar productos (`PUT /api/products/{id}`, campos opcionales, recálculo de la cadena de categorías al reasignar), restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Frontend: el panel admin reutiliza el mismo formulario en modo edición — el botón "Editar" de cada producto carga sus datos, preserva el `id` de las variantes existentes (las nuevas las genera el backend) y "Guardar cambios" envía el `PUT`. Incluye "Cancelar edición" y reutiliza la validación de variantes. |
 | Nombre | Editar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto a editar existe en el sistema (creado previamente vía CU-10). |
@@ -202,7 +202,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-12 |
-| Estado de implementacion | PARCIAL - Backend permite desactivar productos, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta confirmacion en frontend y manejo completo de carritos afectados. |
+| Estado de implementacion | DONE (flujo admin) - Backend desactiva productos (`DELETE /api/products/{id}`, marca `active=false`; el producto sigue referenciable desde pedidos históricos), restringido a `ROLE_ADMINISTRADOR`. Frontend: cada producto del panel admin tiene un botón "Desactivar" que solicita confirmación explícita (`window.confirm`, flujo principal paso 3; si se cancela el producto permanece activo — 3a) y llama al `DELETE`; al desactivarlo sale del listado activo. PENDIENTE el flujo de excepción de carritos afectados (informar a los clientes que tienen el producto en un carrito activo al refrescarlo). |
 | Nombre | Desactivar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto existe y se encuentra activo. |
@@ -219,7 +219,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-13 |
-| Estado de implementacion | PARCIAL - Backend permite listar, crear, renombrar, mover, activar/desactivar categorias con validaciones de jerarquia, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta el panel administrativo. |
+| Estado de implementacion | DONE - Backend permite listar, crear, renombrar, mover, activar/desactivar categorias con validaciones de jerarquia (ciclos al reubicar, recalculo de `ancestorIds` del subarbol y de los productos afectados, bloqueo de baja con productos activos), restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Frontend: `AdminCategoriesView` muestra el arbol completo indentado (patron Composite) con alta (nombre + categoria padre), renombrado inline, reubicacion via selector de nuevo padre (la UI excluye el propio nodo y sus descendientes para evitar ciclos; el backend revalida) y activar/desactivar (la baja pide confirmacion). Surfacea los errores del backend (ciclo, productos activos asociados — flujo alternativo 6a) y cada mutacion refresca el arbol admin y el catalogo publico (`api/categories.ts`). |
 | Nombre | Gestionar Categorías y Subcategorías |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). |
