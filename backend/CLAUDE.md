@@ -62,6 +62,8 @@ En desarrollo local sin Docker, apuntar el URI a `localhost:27017`.
 |---|---|---|
 | Auth | POST | `/api/auth/register` |
 | Auth | POST | `/api/auth/login` |
+| Auth | POST | `/api/auth/logout` |
+| Auth | POST | `/api/auth/change-password` |
 | Productos | GET | `/api/products` |
 | Productos | GET | `/api/products/{id}` |
 | Productos | POST | `/api/products` (admin) |
@@ -74,7 +76,7 @@ En desarrollo local sin Docker, apuntar el URI a `localhost:27017`.
 | Pedidos | POST | `/api/orders` |
 | Pedidos | GET | `/api/orders` |
 | Pedidos | GET | `/api/orders/{id}` |
-| Pedidos | PATCH | `/api/orders/{id}/status` (admin) |
+| Pedidos | POST | `/api/orders/{id}/advance` (admin) |
 | Notificaciones | PUT | `/api/notifications/preferences` |
 
 ## Patrones de diseño — ubicación e intención

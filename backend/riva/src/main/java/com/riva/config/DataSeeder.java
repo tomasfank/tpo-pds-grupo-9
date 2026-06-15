@@ -4,14 +4,18 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import com.riva.dto.CreateProductRequest;
 import com.riva.dto.ProductVariantDto;
 import com.riva.model.category.Category;
 import com.riva.model.product.Size;
+import com.riva.model.user.Administrador;
+import com.riva.model.user.Cliente;
 import com.riva.repository.CategoryRepository;
 import com.riva.repository.ProductRepository;
+import com.riva.repository.UsuarioRepository;
 import com.riva.service.CategoryService;
 import com.riva.service.ProductService;
 
@@ -29,17 +33,32 @@ public class DataSeeder implements CommandLineRunner {
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
     private final ProductService productService;
+    private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public DataSeeder(CategoryRepository categoryRepository, ProductRepository productRepository,
-                      CategoryService categoryService, ProductService productService) {
+                      CategoryService categoryService, ProductService productService,
+                      UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
         this.categoryService = categoryService;
         this.productService = productService;
+        this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void run(String... args) {
+        // Siembra de usuarios (idempotente por email)
+        if (usuarioRepository.findByEmail("admin@riva.com").isEmpty()) {
+            usuarioRepository.save(new Administrador(
+                    "Admin", "RIVA", "admin@riva.com", passwordEncoder.encode("admin12345")));
+        }
+        if (usuarioRepository.findByEmail("cliente@riva.com").isEmpty()) {
+            usuarioRepository.save(new Cliente(
+                    "Cliente", "Demo", "cliente@riva.com", passwordEncoder.encode("cliente12345")));
+        }
+
         if (categoryRepository.count() > 0 || productRepository.count() > 0) {
             return;
         }

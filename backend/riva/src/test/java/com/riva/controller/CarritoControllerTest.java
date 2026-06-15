@@ -15,6 +15,8 @@ import com.riva.dto.ModificarCantidadCarritoRequest;
 import com.riva.model.cart.Carrito;
 import com.riva.model.product.ProductVariant;
 import com.riva.model.product.Size;
+import com.riva.model.user.Rol;
+import com.riva.security.UsuarioPrincipal;
 import com.riva.service.CarritoService;
 
 class CarritoControllerTest {
@@ -23,11 +25,11 @@ class CarritoControllerTest {
     private final CarritoController controller = new CarritoController(carritoService);
 
     @Test
-    void getReturnsClienteCartFromHeader() {
+    void getReturnsClienteCartFromPrincipal() {
         Carrito carrito = carritoConItem();
         when(carritoService.obtenerCarrito("cliente-1")).thenReturn(carrito);
 
-        CarritoResponse response = controller.get("cliente-1");
+        CarritoResponse response = controller.get(principal());
 
         assertThat(response.clienteId()).isEqualTo("cliente-1");
         assertThat(response.items()).hasSize(1);
@@ -40,7 +42,7 @@ class CarritoControllerTest {
         when(carritoService.agregarItem("cliente-1", "prod-1", "var-1", 2)).thenReturn(carrito);
 
         CarritoResponse response = controller.agregarItem(
-                "cliente-1",
+                principal(),
                 new AgregarItemCarritoRequest("prod-1", "var-1", 2)
         );
 
@@ -53,7 +55,7 @@ class CarritoControllerTest {
         Carrito carrito = carritoConItem();
         when(carritoService.modificarCantidad("cliente-1", "item-1", 3)).thenReturn(carrito);
 
-        controller.modificarCantidad("cliente-1", "item-1", new ModificarCantidadCarritoRequest(3));
+        controller.modificarCantidad(principal(), "item-1", new ModificarCantidadCarritoRequest(3));
 
         verify(carritoService).modificarCantidad("cliente-1", "item-1", 3);
     }
@@ -63,7 +65,7 @@ class CarritoControllerTest {
         Carrito carrito = new Carrito("cliente-1");
         when(carritoService.eliminarItem("cliente-1", "item-1")).thenReturn(carrito);
 
-        CarritoResponse response = controller.eliminarItem("cliente-1", "item-1");
+        CarritoResponse response = controller.eliminarItem(principal(), "item-1");
 
         verify(carritoService).eliminarItem("cliente-1", "item-1");
         assertThat(response.items()).isEmpty();
@@ -74,10 +76,14 @@ class CarritoControllerTest {
         Carrito carrito = new Carrito("cliente-1");
         when(carritoService.vaciar("cliente-1")).thenReturn(carrito);
 
-        CarritoResponse response = controller.vaciar("cliente-1");
+        CarritoResponse response = controller.vaciar(principal());
 
         verify(carritoService).vaciar("cliente-1");
         assertThat(response.total()).isEqualByComparingTo("0");
+    }
+
+    private static UsuarioPrincipal principal() {
+        return new UsuarioPrincipal("cliente-1", "cliente-1@riva.com", "hash", Rol.CLIENTE);
     }
 
     private static Carrito carritoConItem() {

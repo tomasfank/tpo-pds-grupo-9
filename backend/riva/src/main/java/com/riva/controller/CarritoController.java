@@ -1,18 +1,19 @@
 package com.riva.controller;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.riva.dto.AgregarItemCarritoRequest;
 import com.riva.dto.CarritoResponse;
 import com.riva.dto.ModificarCantidadCarritoRequest;
+import com.riva.security.UsuarioPrincipal;
 import com.riva.service.CarritoService;
 
 import jakarta.validation.Valid;
@@ -21,8 +22,6 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/cart")
 public class CarritoController {
 
-    private static final String DEFAULT_CLIENTE_ID = "cliente-demo";
-
     private final CarritoService carritoService;
 
     public CarritoController(CarritoService carritoService) {
@@ -30,44 +29,36 @@ public class CarritoController {
     }
 
     @GetMapping
-    public CarritoResponse get(@RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId) {
-        return CarritoResponse.from(carritoService.obtenerCarrito(clienteId));
+    public CarritoResponse get(@AuthenticationPrincipal UsuarioPrincipal principal) {
+        return CarritoResponse.from(carritoService.obtenerCarrito(principal.userId()));
     }
 
     @PostMapping("/items")
     public CarritoResponse agregarItem(
-            @RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId,
-            @Valid @RequestBody AgregarItemCarritoRequest request
-    ) {
+            @AuthenticationPrincipal UsuarioPrincipal principal,
+            @Valid @RequestBody AgregarItemCarritoRequest request) {
         return CarritoResponse.from(carritoService.agregarItem(
-                clienteId,
-                request.productId(),
-                request.variantId(),
-                request.cantidad()
-        ));
+                principal.userId(), request.productId(), request.variantId(), request.cantidad()));
     }
 
     @PatchMapping("/items/{itemId}")
     public CarritoResponse modificarCantidad(
-            @RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId,
+            @AuthenticationPrincipal UsuarioPrincipal principal,
             @PathVariable String itemId,
-            @Valid @RequestBody ModificarCantidadCarritoRequest request
-    ) {
-        return CarritoResponse.from(carritoService.modificarCantidad(clienteId, itemId, request.cantidad()));
+            @Valid @RequestBody ModificarCantidadCarritoRequest request) {
+        return CarritoResponse.from(
+                carritoService.modificarCantidad(principal.userId(), itemId, request.cantidad()));
     }
 
     @DeleteMapping("/items/{itemId}")
     public CarritoResponse eliminarItem(
-            @RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId,
-            @PathVariable String itemId
-    ) {
-        return CarritoResponse.from(carritoService.eliminarItem(clienteId, itemId));
+            @AuthenticationPrincipal UsuarioPrincipal principal,
+            @PathVariable String itemId) {
+        return CarritoResponse.from(carritoService.eliminarItem(principal.userId(), itemId));
     }
 
     @DeleteMapping("/items")
-    public CarritoResponse vaciar(
-            @RequestHeader(name = "X-Cliente-Id", defaultValue = DEFAULT_CLIENTE_ID) String clienteId
-    ) {
-        return CarritoResponse.from(carritoService.vaciar(clienteId));
+    public CarritoResponse vaciar(@AuthenticationPrincipal UsuarioPrincipal principal) {
+        return CarritoResponse.from(carritoService.vaciar(principal.userId()));
     }
 }

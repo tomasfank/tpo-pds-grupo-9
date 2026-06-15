@@ -15,7 +15,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-01 |
-| Estado de implementacion | PENDIENTE - No hay modelo de usuarios, registro, BCrypt, repositorio de usuarios ni pantalla de registro implementados. |
+| Estado de implementacion | DONE (backend) - `AuthController POST /api/auth/register` crea un `Cliente` (jerarquía `Usuario` fiel a la UML) validando email único y robustez mínima de contraseña (`PasswordPolicy`), hasheando con BCrypt. Falta la pantalla de registro en frontend. |
 | Nombre | Registrarse como Cliente |
 | Actor principal | Usuario no registrado |
 | Precondiciones | El usuario no posee cuenta en el sistema. El usuario accede a la plataforma desde la pantalla pública. |
@@ -32,7 +32,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-02 |
-| Estado de implementacion | PENDIENTE - No hay login de cliente, validacion de credenciales, JWT ni sesion real. El sistema usa `X-Cliente-Id` temporal para flujos de carrito/pedidos. |
+| Estado de implementacion | DONE (backend) - `POST /api/auth/login` valida credenciales y devuelve JWT (con `userId`, email, rol) + error genérico ante datos incorrectos. Carrito y pedidos usan el principal autenticado (se eliminó `X-Cliente-Id`). Falta UI de login y manejo de pantalla. CU-05 (recuperar) y bloqueo por intentos quedan fuera de alcance. |
 | Nombre | Iniciar Sesión como Cliente |
 | Actor principal | Cliente |
 | Precondiciones | El usuario posee una cuenta activa con rol Cliente (registrada mediante CU-01). El usuario no tiene una sesión activa. |
@@ -49,7 +49,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-03 |
-| Estado de implementacion | PENDIENTE - No hay login administrativo ni control de rol Administrador. Los endpoints admin estan abiertos con comentarios `TODO(auth)`. |
+| Estado de implementacion | DONE (backend) - El mismo `POST /api/auth/login` autentica administradores (rol `ADMINISTRADOR`, provisionado vía `DataSeeder`). Los endpoints admin (productos, categorías, `POST /api/orders/{id}/advance`) quedan restringidos a `ROLE_ADMINISTRADOR` en `SecurityConfig`. La separación de pantallas Cliente/Admin es del frontend. |
 | Nombre | Iniciar Sesión como Administrador |
 | Actor principal | Administrador |
 | Precondiciones | El usuario posee una cuenta activa con rol Administrador previamente provisionada en el sistema. El usuario no tiene una sesión activa. |
@@ -66,7 +66,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-04 |
-| Estado de implementacion | PENDIENTE - No hay sesion/token real para invalidar ni flujo de cierre de sesion. |
+| Estado de implementacion | DONE (backend) - `POST /api/auth/logout` con JWT stateless: el cliente descarta el token (sin blocklist). El endpoint es público para cubrir el caso de token ya expirado sin error. |
 | Nombre | Cerrar Sesión |
 | Actor principal | Cliente / Administrador |
 | Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
@@ -100,7 +100,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-06 |
-| Estado de implementacion | PENDIENTE - No hay usuario autenticado ni cambio de contrasena implementado. |
+| Estado de implementacion | DONE (backend) - `POST /api/auth/change-password` (autenticado) valida la contraseña actual contra el hash y la robustez de la nueva antes de re-hashear y persistir. Falta la sección de configuración en frontend. |
 | Nombre | Cambiar Contraseña |
 | Actor principal | Cliente / Administrador |
 | Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
@@ -168,7 +168,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-10 |
-| Estado de implementacion | PARCIAL - Backend permite crear productos con variantes y validaciones basicas. Falta login/rol Administrador y falta panel administrativo en frontend. |
+| Estado de implementacion | PARCIAL - Backend permite crear productos con variantes y validaciones basicas, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig` (CU-03 implementado). Falta el panel administrativo en frontend. |
 | Nombre | Crear Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos una categoría donde ubicar el producto (CU-13). |
@@ -185,7 +185,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-11 |
-| Estado de implementacion | PARCIAL - Backend permite editar productos. Falta login/rol Administrador y falta UI administrativa. |
+| Estado de implementacion | PARCIAL - Backend permite editar productos, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta la UI administrativa. |
 | Nombre | Editar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto a editar existe en el sistema (creado previamente vía CU-10). |
@@ -202,7 +202,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-12 |
-| Estado de implementacion | PARCIAL - Backend permite desactivar productos. Falta login/rol Administrador, confirmacion en frontend y manejo completo de carritos afectados. |
+| Estado de implementacion | PARCIAL - Backend permite desactivar productos, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta confirmacion en frontend y manejo completo de carritos afectados. |
 | Nombre | Desactivar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto existe y se encuentra activo. |
@@ -219,7 +219,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-13 |
-| Estado de implementacion | PARCIAL - Backend permite listar, crear, renombrar, mover, activar/desactivar categorias con validaciones de jerarquia. Falta login/rol Administrador y panel administrativo. |
+| Estado de implementacion | PARCIAL - Backend permite listar, crear, renombrar, mover, activar/desactivar categorias con validaciones de jerarquia, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Falta el panel administrativo. |
 | Nombre | Gestionar Categorías y Subcategorías |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). |
@@ -338,7 +338,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-20 |
-| Estado de implementacion | PARCIAL - Backend completo salvo Observer: `PedidoService.procesarPago` instancia el Strategy, delega en el proveedor externo via Adapters (`AdapterTarjeta` / `AdapterPayPal` / `AdapterTransferencia` sobre servicios externos simulados), revalida stock por concurrencia, descuenta el stock de las variantes, transiciona el pedido Pendiente -> Pagado (State) y vacia el carrito post-pago. Falta unicamente disparar las notificaciones al cliente (Observer, ver CU-24, aun no cableado). |
+| Estado de implementacion | PARCIAL - Backend completo salvo Observer: `PedidoService.procesarPago` instancia el Strategy, delega en el proveedor externo via Adapters (`AdapterTarjeta` / `AdapterPayPal` / `AdapterTransferencia` sobre servicios externos simulados), revalida stock por concurrencia, descuenta el stock de las variantes, transiciona el pedido Pendiente -> Pagado (State) y vacia el carrito post-pago. Falta unicamente la integracion del Observer: aunque el avance de estado invoca `notificar()`, el service no suscribe los canales del cliente al pedido, por lo que el pago exitoso todavia no genera notificaciones reales (ver CU-24). |
 | Nombre | Procesar Pago |
 | Actor principal | Cliente |
 | Actores secundarios | Sistema de Pagos (externo) |
@@ -390,7 +390,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-23 |
-| Estado de implementacion | PARCIAL - Backend implementa State y endpoint para avanzar estados; frontend permite pago/envio simulado y entrega automatica. Falta restriccion real a Administrador y faltan notificaciones Observer. |
+| Estado de implementacion | PARCIAL - Backend implementa State y `POST /api/orders/{id}/advance`, ya restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig` (CU-03 implementado); `Pedido.avanzarEstado()` dispara `notificar()` (Observer) en cada transicion. Falta que el service suscriba los canales del cliente al pedido segun sus preferencias: hoy `notificar()` recorre una lista de observadores vacia en el flujo real, por lo que aun no se envian notificaciones efectivas. Frontend permite pago/envio simulado y entrega automatica. |
 | Nombre | Avanzar Estado de Pedido |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos un pedido en estado distinto de "Entregado". |
@@ -407,7 +407,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-24 |
-| Estado de implementacion | PENDIENTE - El lado Subject del Observer ya existe en `Pedido` (`suscribir` / `desuscribir` / `notificar`) junto al contrato `CanalNotificacion`, pero falta todo lo demas: canales concretos (Email / SMS / Push), preferencias persistidas por cliente, suscripcion dinamica real, la invocacion efectiva de `notificar()` ante cambios de estado y la UI de configuracion. |
+| Estado de implementacion | PARCIAL - El patron Observer esta estructuralmente completo y testeado (`ObserverTest`): `Pedido` implementa `SujetoObservable`, existen `CanalEmail`/`CanalSMS`/`CanalPush` y `PreferenciasNotificacion`, ahora embebida en `Cliente` (default todos activos). Con Usuarios/Auth ya disponibles, queda desbloqueada la integración: persistir/editar preferencias por cliente, que el service suscriba los canales al `Pedido` desde esas preferencias, y exponer `PUT /api/notifications/preferences` + UI. |
 | Nombre | Configurar Canales de Notificación |
 | Actor principal | Cliente |
 | Precondiciones | El cliente ha iniciado sesión (vía CU-02). |
