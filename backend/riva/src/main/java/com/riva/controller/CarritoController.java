@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.riva.dto.AgregarItemCarritoRequest;
 import com.riva.dto.CarritoResponse;
 import com.riva.dto.ModificarCantidadCarritoRequest;
+import com.riva.model.cart.Carrito;
 import com.riva.security.UsuarioPrincipal;
 import com.riva.service.CarritoService;
 
@@ -30,14 +31,14 @@ public class CarritoController {
 
     @GetMapping
     public CarritoResponse get(@AuthenticationPrincipal UsuarioPrincipal principal) {
-        return CarritoResponse.from(carritoService.obtenerCarrito(principal.userId()));
+        return responder(carritoService.obtenerCarrito(principal.userId()));
     }
 
     @PostMapping("/items")
     public CarritoResponse agregarItem(
             @AuthenticationPrincipal UsuarioPrincipal principal,
             @Valid @RequestBody AgregarItemCarritoRequest request) {
-        return CarritoResponse.from(carritoService.agregarItem(
+        return responder(carritoService.agregarItem(
                 principal.userId(), request.productId(), request.variantId(), request.cantidad()));
     }
 
@@ -46,7 +47,7 @@ public class CarritoController {
             @AuthenticationPrincipal UsuarioPrincipal principal,
             @PathVariable String itemId,
             @Valid @RequestBody ModificarCantidadCarritoRequest request) {
-        return CarritoResponse.from(
+        return responder(
                 carritoService.modificarCantidad(principal.userId(), itemId, request.cantidad()));
     }
 
@@ -54,11 +55,16 @@ public class CarritoController {
     public CarritoResponse eliminarItem(
             @AuthenticationPrincipal UsuarioPrincipal principal,
             @PathVariable String itemId) {
-        return CarritoResponse.from(carritoService.eliminarItem(principal.userId(), itemId));
+        return responder(carritoService.eliminarItem(principal.userId(), itemId));
     }
 
     @DeleteMapping("/items")
     public CarritoResponse vaciar(@AuthenticationPrincipal UsuarioPrincipal principal) {
-        return CarritoResponse.from(carritoService.vaciar(principal.userId()));
+        return responder(carritoService.vaciar(principal.userId()));
+    }
+
+    // CU-12 — marca los items cuyo producto fue desactivado para avisar al cliente.
+    private CarritoResponse responder(Carrito carrito) {
+        return CarritoResponse.from(carrito, carritoService.productosInactivos(carrito));
     }
 }

@@ -16,9 +16,11 @@ public record ItemCarritoResponse(
         int cantidad,
         BigDecimal precioUnitario,
         BigDecimal subtotal,
-        int stockDisponible
+        int stockDisponible,
+        // CU-12 — false cuando el producto fue desactivado mientras estaba en el carrito.
+        boolean disponible
 ) {
-    public static ItemCarritoResponse from(ItemCarrito item) {
+    public static ItemCarritoResponse from(ItemCarrito item, boolean disponible) {
         ProductVariant variante = item.getVariante();
         return new ItemCarritoResponse(
                 item.getId(),
@@ -30,7 +32,8 @@ public record ItemCarritoResponse(
                 item.getCantidad(),
                 variante.getPrecioUnitario(),
                 item.subtotalDecimal(),
-                variante.getStock()
+                variante.getStock(),
+                disponible
         );
     }
 }

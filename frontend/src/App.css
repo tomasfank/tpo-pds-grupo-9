@@ -196,6 +196,7 @@ h3 {
 .catalog-view,
 .product-detail,
 .cart-view,
+.checkout-view,
 .orders-view,
 .empty-state {
   padding: clamp(48px, 7vw, 96px) clamp(20px, 6vw, 92px);
@@ -1224,5 +1225,87 @@ h3 {
   .admin-variant-row,
   .admin-form-row {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* CU-23 — encabezado y estado de cada pedido en el panel del administrador. */
+.order-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-state-badge {
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.order-items {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* CU-12 — destaca el item cuyo producto fue desactivado. */
+.cart-item.is-unavailable {
+  opacity: 0.7;
+  border: 1px solid var(--accent);
+}
+
+/* Singleton Configuracion — nota de IVA / envio en el resumen del carrito. */
+.cart-config-note {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Patron Facade — pantalla dedicada de checkout (POST /orders/checkout). */
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: start;
+}
+
+.checkout-summary {
+  display: grid;
+  gap: 12px;
+  padding: 28px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.checkout-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.checkout-total strong {
+  font-size: 28px;
+}
+
+.checkout-forms {
+  display: grid;
+  gap: 20px;
+}
+
+@media (max-width: 880px) {
+  .checkout-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

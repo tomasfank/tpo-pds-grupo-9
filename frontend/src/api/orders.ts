@@ -1,6 +1,12 @@
 import axios from 'axios'
 import { getToken } from './auth'
-import type { Order, PaymentRequest, PaymentResponse, ShippingAddress } from '../types'
+import type {
+  CheckoutResponse,
+  Order,
+  PaymentRequest,
+  PaymentResponse,
+  ShippingAddress,
+} from '../types'
 
 const apiUrl =
   import.meta.env.VITE_API_URL ??
@@ -22,13 +28,24 @@ rivaApi.interceptors.request.use((config) => {
   return config
 })
 
-export async function createOrder() {
-  const { data } = await rivaApi.post<Order>('/orders')
+// Patron Facade (CU-18 a CU-20): confirma la compra completa en un paso —
+// crea el pedido desde el carrito, procesa el pago y dispara las notificaciones.
+export async function checkout(payment: PaymentRequest, direccionEnvio?: ShippingAddress) {
+  const { data } = await rivaApi.post<CheckoutResponse>('/orders/checkout', {
+    pago: payment,
+    direccionEnvio: direccionEnvio ?? null,
+  })
   return data
 }
 
 export async function getOrders() {
   const { data } = await rivaApi.get<Order[]>('/orders')
+  return data
+}
+
+// CU-23 — listado de todos los pedidos para el administrador (requiere rol admin).
+export async function getAllOrders() {
+  const { data } = await rivaApi.get<Order[]>('/orders/admin')
   return data
 }
 

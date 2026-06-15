@@ -97,6 +97,18 @@ class PedidoServiceTest {
     }
 
     @Test
+    void listarTodosDevuelveLosPedidosDeTodosLosClientes() {
+        Pedido p1 = new Pedido("cliente-1", List.of(itemPedido()), null);
+        Pedido p2 = new Pedido("cliente-2", List.of(itemPedido()), null);
+        when(pedidoRepository.findAllByOrderByFechaDesc()).thenReturn(List.of(p1, p2));
+
+        List<Pedido> todos = pedidoService.listarTodos();
+
+        assertThat(todos).hasSize(2);
+        verify(pedidoRepository).findAllByOrderByFechaDesc();
+    }
+
+    @Test
     void obtenerDetalleRechazaPedidoDeOtroCliente() {
         Pedido pedido = new Pedido("otro-cliente", List.of(itemPedido()), null);
         when(pedidoRepository.findById("pedido-1")).thenReturn(Optional.of(pedido));

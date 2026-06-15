@@ -12,6 +12,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.riva.dto.CheckoutRequest;
+import com.riva.dto.CheckoutResponse;
 import com.riva.dto.DireccionEnvioRequest;
 import com.riva.dto.PedidoResponse;
 import com.riva.dto.ProcesarPagoRequest;
@@ -24,11 +26,13 @@ import com.riva.model.product.Size;
 import com.riva.model.user.Rol;
 import com.riva.security.UsuarioPrincipal;
 import com.riva.service.PedidoService;
+import com.riva.service.TiendaFacade;
 
 class PedidoControllerTest {
 
     private final PedidoService pedidoService = mock(PedidoService.class);
-    private final PedidoController controller = new PedidoController(pedidoService);
+    private final TiendaFacade tiendaFacade = mock(TiendaFacade.class);
+    private final PedidoController controller = new PedidoController(pedidoService, tiendaFacade);
 
     @Test
     void crearCreaPedidoDesdeCarritoDelClienteYDevuelveEstadoPendiente() {
@@ -118,6 +122,28 @@ class PedidoControllerTest {
         assertThat(response.exito()).isTrue();
         assertThat(response.pedido().estado()).isEqualTo("Pagado");
         assertThat(response.pedido().metodoPagoNombre()).isEqualTo("Tarjeta");
+    }
+
+    @Test
+    void checkoutDelegaEnLaFachadaYDevuelveElResultadoDeLaCompra() {
+        Pedido pedido = pedido();
+        pedido.registrarMetodoPago("Tarjeta");
+        pedido.avanzarEstado();
+        ProcesarPagoRequest pago = new ProcesarPagoRequest(
+                "TARJETA", "4111111111111111", "Guido Morabito", "12/29", "123",
+                null, null, null, null);
+        CheckoutRequest request = new CheckoutRequest(pago, null);
+        CheckoutResponse esperado = new CheckoutResponse(
+                true, "Pago aprobado", PedidoResponse.from(pedido), BigDecimal.ZERO, true);
+        when(tiendaFacade.confirmarCompra(eq("cliente-1"), eq(pago), any()))
+                .thenReturn(esperado);
+
+        CheckoutResponse response = controller.checkout(principal(), request);
+
+        verify(tiendaFacade).confirmarCompra(eq("cliente-1"), eq(pago), any());
+        assertThat(response.exito()).isTrue();
+        assertThat(response.envioGratis()).isTrue();
+        assertThat(response.pedido().estado()).isEqualTo("Pagado");
     }
 
     private static UsuarioPrincipal principal() {

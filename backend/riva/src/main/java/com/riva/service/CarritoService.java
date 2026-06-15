@@ -1,5 +1,10 @@
 package com.riva.service;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
 import org.springframework.stereotype.Service;
 
 import com.riva.exception.NotFoundException;
@@ -24,6 +29,25 @@ public class CarritoService {
 
     public Carrito obtenerCarrito(String clienteId) {
         return obtenerOCrearCarrito(clienteId);
+    }
+
+    // CU-12 — devuelve los productId del carrito que ya no estan activos (desactivados
+    // por el administrador mientras estaban en el carrito). Se usa para avisar al cliente.
+    public Set<String> productosInactivos(Carrito carrito) {
+        Set<String> productIds = carrito.getItems().stream()
+                .map(item -> item.getVariante().getProductId())
+                .collect(Collectors.toSet());
+        if (productIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> activos = StreamSupport
+                .stream(productRepository.findAllById(productIds).spliterator(), false)
+                .filter(Product::isActive)
+                .map(Product::getId)
+                .collect(Collectors.toSet());
+        Set<String> inactivos = new HashSet<>(productIds);
+        inactivos.removeAll(activos);
+        return inactivos;
     }
 
     public Carrito agregarItem(String clienteId, String productId, String variantId, int cantidad) {
@@ -56,9 +80,8 @@ public class CarritoService {
     }
 
     private Carrito obtenerOCrearCarrito(String clienteId) {
-        // UML: el carrito pertenece a Cliente. Hasta que exista autenticacion/JWT y clase Cliente,
-        // la capa HTTP entrega clienteId como identificador temporal del cliente propietario.
-        // TODO(usuarios): resolver cliente desde sesion autenticada y asociar Carrito con Cliente real.
+        // UML: el carrito pertenece a Cliente. El clienteId proviene del JWT autenticado
+        // (UsuarioPrincipal); si el cliente aun no tiene carrito, se crea uno vacio.
         if (clienteId == null || clienteId.isBlank()) {
             throw new ValidationException("clienteId es obligatorio");
         }

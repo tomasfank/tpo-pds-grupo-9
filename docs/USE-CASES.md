@@ -100,7 +100,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-06 |
-| Estado de implementacion | DONE (backend) - `POST /api/auth/change-password` (autenticado) valida la contraseña actual contra el hash y la robustez de la nueva antes de re-hashear y persistir. Falta la sección de configuración en frontend. |
+| Estado de implementacion | DONE - `POST /api/auth/change-password` (autenticado) valida la contraseña actual contra el hash y la robustez de la nueva antes de re-hashear y persistir. Frontend: `AccountView` (sección "Cuenta", disponible para Cliente y Administrador) toma contraseña actual + nueva + repetición, valida localmente la coincidencia (excepción "las contraseñas no coinciden") y postea a `/api/auth/change-password` con el JWT (`api/auth.ts` adjunta el Bearer); surfacea los errores del backend (actual incorrecta — flujo 4a; nueva débil — flujo 5a). |
 | Nombre | Cambiar Contraseña |
 | Actor principal | Cliente / Administrador |
 | Precondiciones | El usuario tiene una sesión activa (vía CU-02 o CU-03). |
@@ -202,7 +202,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-12 |
-| Estado de implementacion | DONE (flujo admin) - Backend desactiva productos (`DELETE /api/products/{id}`, marca `active=false`; el producto sigue referenciable desde pedidos históricos), restringido a `ROLE_ADMINISTRADOR`. Frontend: cada producto del panel admin tiene un botón "Desactivar" que solicita confirmación explícita (`window.confirm`, flujo principal paso 3; si se cancela el producto permanece activo — 3a) y llama al `DELETE`; al desactivarlo sale del listado activo. PENDIENTE el flujo de excepción de carritos afectados (informar a los clientes que tienen el producto en un carrito activo al refrescarlo). |
+| Estado de implementacion | DONE (flujo admin) - Backend desactiva productos (`DELETE /api/products/{id}`, marca `active=false`; el producto sigue referenciable desde pedidos históricos), restringido a `ROLE_ADMINISTRADOR`. Frontend: cada producto del panel admin tiene un botón "Desactivar" que solicita confirmación explícita (`window.confirm`, flujo principal paso 3; si se cancela el producto permanece activo — 3a) y llama al `DELETE`; al desactivarlo sale del listado activo. Excepción de carritos afectados cubierta: al refrescar el carrito (`GET /api/cart` y cada mutación), `CarritoService.productosInactivos` detecta los productos desactivados y `CarritoResponse` marca esos ítems con `disponible=false`; el `CartView` los resalta, avisa al cliente y bloquea "Confirmar compra" hasta que los quite (sin borrarlos automáticamente). Cubierto por `CarritoServiceTest`. |
 | Nombre | Desactivar Producto |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). El producto existe y se encuentra activo. |
@@ -321,7 +321,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-19 |
-| Estado de implementacion | DONE (backend) - Strategy completo: `MetodoPagoFactory` instancia en tiempo de ejecucion la estrategia segun el metodo elegido (`PagoTarjeta` / `PagoPayPal` / `PagoTransferencia`), valida el formato de los datos via `MetodoPago.validarDatosPago()` y el metodo seleccionado queda persistido en el pedido (`metodoPagoNombre`). La seleccion + procesamiento se reciben en `POST /api/orders/{id}/payment`. Frontend muestra pago simulado cuando el pedido esta `Pendiente`; queda por verificar la UI de seleccion de metodo con sus tres opciones. |
+| Estado de implementacion | DONE (backend) - Strategy completo: `MetodoPagoFactory` instancia en tiempo de ejecucion la estrategia segun el metodo elegido (`PagoTarjeta` / `PagoPayPal` / `PagoTransferencia`), valida el formato de los datos via `MetodoPago.validarDatosPago()` y el metodo seleccionado queda persistido en el pedido (`metodoPagoNombre`). La seleccion + procesamiento se reciben en `POST /api/orders/{id}/payment`. Frontend: el `OrderCard` (vista `Pedidos`) muestra el pago cuando el pedido esta `Pendiente` con un selector de los tres metodos (Tarjeta / PayPal / Transferencia) que renderiza el formulario correspondiente y arma el `PaymentRequest` segun la opcion elegida. |
 | Nombre | Seleccionar Método de Pago |
 | Actor principal | Cliente |
 | Precondiciones | Existe un pedido en estado "Pendiente" asociado al cliente, creado mediante CU-18. |
@@ -390,7 +390,7 @@ A continuación se detallan los casos de uso del sistema, organizados por módul
 | Campo | Detalle |
 |---|---|
 | Identificador | CU-23 |
-| Estado de implementacion | DONE (backend) - Backend implementa State y `POST /api/orders/{id}/advance`, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Observer integrado: `PedidoService.avanzarEstado` suscribe los canales habilitados del cliente al pedido antes de cada transicion, y `Pedido.avanzarEstado()` dispara `notificar()`; ademas `Pedido.notificar()` aisla el fallo de un canal (lo registra y continua, sin revertir el estado — flujo alternativo 6a). Cubierto por `PedidoServiceTest` (suscripcion segun preferencias) y `ObserverTest`. Limitacion de UI: avanzar estado requiere token de administrador; no hay panel admin de pedidos dedicado (queda como follow-up), por lo que la transicion Enviado/Entregado se ejercita via API admin o por los controles existentes en la vista `Pedidos` con sesion de administrador. |
+| Estado de implementacion | DONE - Backend implementa State y `POST /api/orders/{id}/advance`, restringido a `ROLE_ADMINISTRADOR` en `SecurityConfig`. Observer integrado: `PedidoService.avanzarEstado` suscribe los canales habilitados del cliente al pedido antes de cada transicion, y `Pedido.avanzarEstado()` dispara `notificar()`; ademas `Pedido.notificar()` aisla el fallo de un canal (lo registra y continua, sin revertir el estado — flujo alternativo 6a). Cubierto por `PedidoServiceTest` (incluye `listarTodos`) y `ObserverTest`. Frontend: `AdminOrdersView` (panel admin → "Pedidos") lista todos los pedidos via `GET /api/orders/admin` (nuevo endpoint solo-admin) y muestra el boton "Avanzar a {siguiente}" segun el estado (Pagado→Enviado, Enviado→Entregado; Pendiente espera el pago, Entregado es terminal — patron State). Al avanzar, el backend notifica al cliente por sus canales (Observer) y la vista refleja el nuevo estado. Los controles de transicion se quitaron del `OrderCard` del cliente (el cliente solo paga y carga su direccion via `PATCH`); asi cada transicion queda donde corresponde por rol. |
 | Nombre | Avanzar Estado de Pedido |
 | Actor principal | Administrador |
 | Precondiciones | El administrador ha iniciado sesión (vía CU-03). Existe al menos un pedido en estado distinto de "Entregado". |

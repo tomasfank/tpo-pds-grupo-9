@@ -12,6 +12,16 @@ const rivaApi = axios.create({
 
 const SESSION_KEY = 'riva.auth.session'
 
+// register/login/logout son publicos; change-password (CU-06) exige JWT. Se adjunta
+// el Bearer cuando hay sesion activa (inofensivo para los endpoints publicos).
+rivaApi.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 type LoginResponse = {
   token: string
   rol: Rol
@@ -42,6 +52,12 @@ export async function login(email: string, password: string): Promise<AuthSessio
     apellido: data.apellido,
     email: data.email,
   }
+}
+
+// CU-06 — cambio de contrasena del usuario autenticado contra POST /api/auth/change-password.
+// El backend valida la contrasena actual y la robustez de la nueva antes de persistir.
+export async function changePassword(actual: string, nueva: string): Promise<void> {
+  await rivaApi.post('/auth/change-password', { actual, nueva })
 }
 
 // CU-04 — cierre de sesion. Con JWT stateless basta con descartar el token local;

@@ -66,6 +66,13 @@ public class PedidoService {
                 .toList();
     }
 
+    // CU-23 — listado completo para el administrador (todos los clientes).
+    public List<Pedido> listarTodos() {
+        return pedidoRepository.findAllByOrderByFechaDesc().stream()
+                .peek(Pedido::reconstruirEstadoDesdePersistencia)
+                .toList();
+    }
+
     public Pedido obtenerDetalle(String clienteId, String pedidoId) {
         validarCliente(clienteId);
         Pedido pedido = pedidoRepository.findById(pedidoId)

@@ -49,6 +49,8 @@ export type CartItem = {
   precioUnitario: number
   subtotal: number
   stockDisponible: number
+  // CU-12 — false si el producto fue desactivado mientras estaba en el carrito.
+  disponible: boolean
 }
 
 export type Cart = {
@@ -100,19 +102,30 @@ export type ViewName =
   | 'category'
   | 'product'
   | 'cart'
+  | 'checkout'
   | 'orders'
   | 'login'
   | 'register'
   | 'notifications'
+  | 'account'
   | 'admin-login'
   | 'admin-products'
   | 'admin-categories'
+  | 'admin-orders'
 
 // CU-24 — canales de notificacion que el cliente decide recibir (patron Observer).
 export type NotificationPreferences = {
   email: boolean
   sms: boolean
   push: boolean
+}
+
+// Parametros generales del ecommerce (patron Singleton: Configuracion).
+export type StoreConfig = {
+  moneda: string
+  tasaIva: number
+  costoEnvio: number
+  umbralEnvioGratis: number
 }
 
 // CU-13 — categoria plana (nodo del arbol) tal como la expone el backend para administracion.
@@ -185,4 +198,14 @@ export type PaymentResponse = {
   exito: boolean
   mensaje: string
   pedido: Order
+}
+
+// CU-18 a CU-20 resueltos en un solo paso por el patron Facade (TiendaFacade.confirmarCompra):
+// crea el pedido, procesa el pago y notifica. costoEnvio/envioGratis derivan del Singleton Configuracion.
+export type CheckoutResponse = {
+  exito: boolean
+  mensaje: string
+  pedido: Order
+  costoEnvio: number
+  envioGratis: boolean
 }

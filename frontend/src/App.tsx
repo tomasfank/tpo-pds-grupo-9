@@ -20,12 +20,14 @@ import {
 } from './api/products'
 import {
   advanceOrder,
-  createOrder,
+  checkout,
+  getAllOrders,
   getOrders,
   processOrderPayment,
   updateOrderShippingAddress,
 } from './api/orders'
 import {
+  changePassword as changePasswordRequest,
   clearSession,
   getSession,
   login as loginRequest,
@@ -37,6 +39,7 @@ import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from './api/notifications'
+import { getConfig } from './api/config'
 import {
   activateCategory,
   createCategory,
@@ -53,7 +56,9 @@ import type {
   CategoryTreeNode,
   CreateProductPayload,
   NotificationPreferences,
+  StoreConfig,
   Order,
+  PaymentMethod,
   PaymentRequest,
   Product,
   ProductFilters,
@@ -126,6 +131,112 @@ const rivaTransferAccount = {
   banco: 'Banco Demo RIVA',
 }
 
+// Ventana simulada de PayPal. Se correlaciona por contextId (id de pedido para el
+// reintento en "Pedidos", o un token de checkout cuando el pedido todavia no existe —
+// patron Facade) para que el listener resuelva solo el pago que le corresponde.
+function openPayPalPopup(contextId: string, total: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const popup = window.open('', `riva-paypal-${contextId}`, 'width=460,height=560')
+    if (!popup) {
+      resolve(null)
+      return
+    }
+
+    function handleMessage(event: MessageEvent) {
+      if (
+        typeof event.data !== 'object' ||
+        event.data === null ||
+        event.data.type !== 'RIVA_PAYPAL_APPROVED' ||
+        event.data.contextId !== contextId ||
+        typeof event.data.emailCuenta !== 'string'
+      ) {
+        return
+      }
+      window.removeEventListener('message', handleMessage)
+      resolve(event.data.emailCuenta)
+    }
+
+    window.addEventListener('message', handleMessage)
+
+    popup.document.write(`
+      <!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>PayPal - RIVA</title>
+          <style>
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: grid;
+              place-items: center;
+              background: #f7f9fc;
+              color: #10213f;
+              font-family: Inter, Arial, sans-serif;
+            }
+            form {
+              width: min(360px, calc(100vw - 32px));
+              display: grid;
+              gap: 14px;
+              padding: 28px;
+              background: white;
+              border: 1px solid #d7e0ef;
+              box-shadow: 0 18px 60px rgba(16, 33, 63, 0.14);
+            }
+            h1 {
+              margin: 0;
+              color: #003087;
+              font-size: 28px;
+            }
+            p {
+              margin: 0;
+              color: #526172;
+            }
+            input, button {
+              min-height: 44px;
+              font: inherit;
+            }
+            input {
+              border: 1px solid #c9d4e5;
+              padding: 10px 12px;
+            }
+            button {
+              border: 0;
+              background: #0070ba;
+              color: white;
+              font-weight: 800;
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <form id="paypal-form">
+            <h1>PayPal</h1>
+            <p>Pago simulado por ${pesoFormatter.format(total)}.</p>
+            <input id="email" type="email" required placeholder="Email de cuenta PayPal" autofocus />
+            <input id="password" type="password" required placeholder="Contrasena" />
+            <button type="submit">Pagar con PayPal</button>
+          </form>
+          <script>
+            document.getElementById('paypal-form').addEventListener('submit', function (event) {
+              event.preventDefault();
+              var email = document.getElementById('email').value;
+              window.opener.postMessage({
+                type: 'RIVA_PAYPAL_APPROVED',
+                contextId: '${contextId}',
+                emailCuenta: email
+              }, '*');
+              window.close();
+            });
+          </script>
+        </body>
+      </html>
+    `)
+    popup.document.close()
+  })
+}
+
 type RouteState = {
   view: ViewName
   categoryId?: string
@@ -156,6 +267,14 @@ function App() {
   const [prefsError, setPrefsError] = useState('')
   const [prefsMessage, setPrefsMessage] = useState('')
   const [isPrefsLoading, setIsPrefsLoading] = useState(false)
+  const [adminOrders, setAdminOrders] = useState<Order[]>([])
+  const [adminOrdersError, setAdminOrdersError] = useState('')
+  const [adminOrdersMessage, setAdminOrdersMessage] = useState('')
+  const [isAdminOrdersLoading, setIsAdminOrdersLoading] = useState(false)
+  const [accountError, setAccountError] = useState('')
+  const [accountMessage, setAccountMessage] = useState('')
+  const [isAccountLoading, setIsAccountLoading] = useState(false)
+  const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null)
   const [adminError, setAdminError] = useState('')
   const [adminMessage, setAdminMessage] = useState('')
   const [isAdminLoading, setIsAdminLoading] = useState(false)
@@ -193,6 +312,23 @@ function App() {
 
     loadInitialCatalog()
 
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Parametros generales del ecommerce (patron Singleton: Configuracion). Endpoint publico.
+  useEffect(() => {
+    let isMounted = true
+    getConfig()
+      .then((config) => {
+        if (isMounted) {
+          setStoreConfig(config)
+        }
+      })
+      .catch(() => {
+        // La config es informativa; si falla, el resto de la tienda sigue operativa.
+      })
     return () => {
       isMounted = false
     }
@@ -400,34 +536,34 @@ function App() {
     }
   }
 
-  async function handleCreateOrder() {
+  // Patron Facade (CU-18 a CU-20): la pantalla de checkout confirma la compra en un
+  // solo paso. confirmarCompra crea el pedido, procesa el pago (Strategy), avanza el
+  // estado (State) y notifica (Observer); si el pago falla, el pedido queda Pendiente
+  // y el reintento vive en "Pedidos".
+  async function handleCheckout(payment: PaymentRequest, direccionEnvio?: ShippingAddress) {
     try {
       setIsCartLoading(true)
       setOrdersError('')
       setOrdersMessage('')
-      const pedido = await createOrder()
-      setOrders((current) => [pedido, ...current.filter((item) => item.id !== pedido.id)])
-      setOrdersMessage('Pedido creado en estado Pendiente.')
+      const result = await checkout(payment, direccionEnvio)
+      setOrders((current) => [
+        result.pedido,
+        ...current.filter((item) => item.id !== result.pedido.id),
+      ])
+      // El backend vacia el carrito solo ante pago exitoso; refrescamos para reflejarlo.
+      const updatedCart = await getCart()
+      setCart(updatedCart)
+      if (result.exito) {
+        setOrdersMessage(result.mensaje)
+      } else {
+        setOrdersError(result.mensaje)
+      }
       setRoute({ view: 'orders' })
     } catch {
       setOrdersError('No pudimos confirmar la compra. Revisa que el carrito tenga stock disponible.')
+      setRoute({ view: 'orders' })
     } finally {
       setIsCartLoading(false)
-    }
-  }
-
-  async function handleAdvanceOrder(orderId: string) {
-    try {
-      setIsOrdersLoading(true)
-      setOrdersError('')
-      setOrdersMessage('')
-      const updated = await advanceOrder(orderId)
-      setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)))
-      setOrdersMessage(`Pedido actualizado a ${updated.estado}.`)
-    } catch {
-      setOrdersError('No pudimos avanzar el estado del pedido.')
-    } finally {
-      setIsOrdersLoading(false)
     }
   }
 
@@ -450,24 +586,85 @@ function App() {
     }
   }
 
-  async function handleSaveShippingAndShip(orderId: string, address: ShippingAddress) {
+  // CU-18/CU-22 — el cliente carga/actualiza su direccion de envio (solo PATCH; el
+  // avance de estado a Enviado es responsabilidad del administrador, CU-23).
+  async function handleSaveShippingAddress(orderId: string, address: ShippingAddress) {
     try {
       setIsOrdersLoading(true)
       setOrdersError('')
       setOrdersMessage('')
-      const withAddress = await updateOrderShippingAddress(orderId, address)
-      const shipped = await advanceOrder(orderId)
-      const updated = {
-        ...shipped,
-        direccionEnvio: withAddress.direccionEnvio,
-      }
+      const updated = await updateOrderShippingAddress(orderId, address)
       setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)))
-      setOrdersMessage('Direccion cargada. Pedido enviado.')
+      setOrdersMessage('Direccion de envio guardada.')
     } catch {
       setOrdersError('No pudimos guardar la direccion de envio.')
     } finally {
       setIsOrdersLoading(false)
     }
+  }
+
+  // CU-23 — el administrador lista todos los pedidos para gestionarlos.
+  async function loadAdminOrders() {
+    try {
+      setIsAdminOrdersLoading(true)
+      setAdminOrdersError('')
+      const data = await getAllOrders()
+      setAdminOrders(data)
+    } catch {
+      setAdminOrdersError('No pudimos cargar los pedidos.')
+    } finally {
+      setIsAdminOrdersLoading(false)
+    }
+  }
+
+  function navigateToAdminOrders() {
+    if (session?.rol === 'ADMINISTRADOR') {
+      setAdminOrdersMessage('')
+      navigate({ view: 'admin-orders' })
+      void loadAdminOrders()
+    } else {
+      setAuthError('')
+      navigate({ view: 'admin-login' })
+    }
+  }
+
+  // CU-23 — el administrador avanza el estado del pedido (State); el backend notifica
+  // al cliente por los canales habilitados (Observer).
+  async function handleAdminAdvanceOrder(orderId: string) {
+    try {
+      setIsAdminOrdersLoading(true)
+      setAdminOrdersError('')
+      setAdminOrdersMessage('')
+      const updated = await advanceOrder(orderId)
+      setAdminOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)))
+      setAdminOrdersMessage(`Pedido ${updated.id?.slice(0, 8)} avanzado a ${updated.estado}.`)
+    } catch (error) {
+      setAdminOrdersError(extractApiMessage(error, 'No pudimos avanzar el estado del pedido.'))
+    } finally {
+      setIsAdminOrdersLoading(false)
+    }
+  }
+
+  // CU-06 — Cambiar Contrasena (Cliente o Administrador autenticado).
+  async function handleChangePassword(actual: string, nueva: string) {
+    try {
+      setIsAccountLoading(true)
+      setAccountError('')
+      setAccountMessage('')
+      await changePasswordRequest(actual, nueva)
+      setAccountMessage('Contrasena actualizada con exito.')
+    } catch (error) {
+      // CU-06 flujo alternativo: contrasena actual incorrecta o nueva debil (mensaje del backend).
+      setAccountError(extractApiMessage(error, 'No pudimos cambiar la contrasena.'))
+    } finally {
+      setIsAccountLoading(false)
+    }
+  }
+
+  function navigateToAccount() {
+    setAccountError('')
+    setAccountMessage('')
+    navigate({ view: 'account' })
   }
 
   function navigateToOrders() {
@@ -608,9 +805,12 @@ function App() {
     setAdminError('')
     setCart(null)
     setOrders([])
+    setAdminOrders([])
     setNotificationPrefs(null)
     setPrefsMessage('')
     setPrefsError('')
+    setAccountError('')
+    setAccountMessage('')
     navigate({ view: 'home' })
   }
 
@@ -805,6 +1005,9 @@ function App() {
             <button className="cart-link" type="button" onClick={navigateToNotifications}>
               Notificaciones
             </button>
+            <button className="cart-link" type="button" onClick={navigateToAccount}>
+              Cuenta
+            </button>
             <span className="session-greeting">Hola, {session?.nombre}</span>
             <button className="cart-link ghost-button" type="button" onClick={handleLogout}>
               Salir
@@ -818,6 +1021,12 @@ function App() {
             </button>
             <button className="cart-link" type="button" onClick={navigateToAdminCategories}>
               Categorias
+            </button>
+            <button className="cart-link" type="button" onClick={navigateToAdminOrders}>
+              Pedidos
+            </button>
+            <button className="cart-link" type="button" onClick={navigateToAccount}>
+              Cuenta
             </button>
             <button className="cart-link ghost-button" type="button" onClick={handleLogout}>
               Salir
@@ -911,13 +1120,25 @@ function App() {
         {route.view === 'cart' && (
           <CartView
             cart={cart}
+            config={storeConfig}
             isLoading={isCartLoading}
             error={cartError}
             onQuantityChange={handleUpdateCartItem}
             onRemoveItem={handleRemoveCartItem}
             onClear={handleClearCart}
-            onCreateOrder={handleCreateOrder}
+            onCheckout={() => navigate({ view: 'checkout' })}
             onContinueShopping={() => navigate({ view: 'home' })}
+          />
+        )}
+
+        {route.view === 'checkout' && (
+          <CheckoutView
+            cart={cart}
+            config={storeConfig}
+            isLoading={isCartLoading}
+            error={ordersError}
+            onCheckout={handleCheckout}
+            onBack={() => navigate({ view: 'cart' })}
           />
         )}
 
@@ -928,9 +1149,8 @@ function App() {
             error={ordersError}
             message={ordersMessage}
             onRefresh={loadOrders}
-            onAdvance={handleAdvanceOrder}
             onProcessPayment={handleProcessPayment}
-            onSaveShippingAndShip={handleSaveShippingAndShip}
+            onSaveShippingAddress={handleSaveShippingAddress}
             onContinueShopping={() => navigate({ view: 'home' })}
           />
         )}
@@ -1009,6 +1229,44 @@ function App() {
               description="La configuracion de notificaciones es parte de tu cuenta de cliente."
               actionLabel="Ir al login"
               onAction={() => navigate({ view: 'login' })}
+            />
+          ))}
+
+        {route.view === 'account' &&
+          (session ? (
+            <AccountView
+              isLoading={isAccountLoading}
+              error={accountError}
+              message={accountMessage}
+              onChangePassword={handleChangePassword}
+            />
+          ) : (
+            <EmptyState
+              eyebrow="Acceso restringido"
+              title="Necesitas iniciar sesion"
+              description="La configuracion de tu cuenta requiere una sesion activa."
+              actionLabel="Ir al login"
+              onAction={() => navigate({ view: 'login' })}
+            />
+          ))}
+
+        {route.view === 'admin-orders' &&
+          (isAdmin ? (
+            <AdminOrdersView
+              orders={adminOrders}
+              isLoading={isAdminOrdersLoading}
+              error={adminOrdersError}
+              message={adminOrdersMessage}
+              onRefresh={loadAdminOrders}
+              onAdvance={handleAdminAdvanceOrder}
+            />
+          ) : (
+            <EmptyState
+              eyebrow="Acceso restringido"
+              title="Necesitas iniciar sesion como administrador"
+              description="La gestion de pedidos solo esta disponible para administradores."
+              actionLabel="Ir al login admin"
+              onAction={() => navigate({ view: 'admin-login' })}
             />
           ))}
 
@@ -1332,26 +1590,33 @@ function ProductDetailView({
 
 type CartViewProps = {
   cart: Cart | null
+  config: StoreConfig | null
   isLoading: boolean
   error: string
   onQuantityChange: (itemId: string, cantidad: number) => Promise<void>
   onRemoveItem: (itemId: string) => Promise<void>
   onClear: () => Promise<void>
-  onCreateOrder: () => Promise<void>
+  onCheckout: () => void
   onContinueShopping: () => void
 }
 
 function CartView({
   cart,
+  config,
   isLoading,
   error,
   onQuantityChange,
   onRemoveItem,
   onClear,
-  onCreateOrder,
+  onCheckout,
   onContinueShopping,
 }: CartViewProps) {
   const items = cart?.items ?? []
+  // CU-12 — algun producto fue desactivado mientras estaba en el carrito.
+  const hasUnavailable = items.some((item) => !item.disponible)
+  const total = cart?.total ?? 0
+  // Singleton Configuracion: envio gratis al superar el umbral.
+  const envioGratis = config ? total >= config.umbralEnvioGratis : false
 
   return (
     <section className="cart-view">
@@ -1363,6 +1628,11 @@ function CartView({
 
       {error && <p className="status-text is-error">{error}</p>}
       {isLoading && <p className="status-text">Actualizando carrito...</p>}
+      {hasUnavailable && (
+        <p className="status-text is-error">
+          Algun producto de tu carrito ya no esta disponible. Quitalo para poder confirmar la compra.
+        </p>
+      )}
 
       {items.length === 0 && !isLoading ? (
         <EmptyState
@@ -1376,12 +1646,20 @@ function CartView({
         <div className="cart-layout">
           <div className="cart-items">
             {items.map((item) => (
-              <article className="cart-item" key={item.id}>
+              <article
+                className={item.disponible ? 'cart-item' : 'cart-item is-unavailable'}
+                key={item.id}
+              >
                 <div className="cart-item-image" aria-hidden="true">
                   {item.productName.slice(0, 1)}
                 </div>
                 <div>
                   <h2>{item.productName}</h2>
+                  {!item.disponible && (
+                    <p className="status-text is-error">
+                      Producto no disponible. Quitalo del carrito.
+                    </p>
+                  )}
                   <p>
                     {item.size ?? 'Unico'} / {item.color ?? 'Sin color'} / Stock {item.stockDisponible}
                   </p>
@@ -1427,14 +1705,26 @@ function CartView({
 
           <aside className="cart-summary" aria-label="Resumen del carrito">
             <p>Total</p>
-            <strong>{pesoFormatter.format(cart?.total ?? 0)}</strong>
+            <strong>{pesoFormatter.format(total)}</strong>
+            {config && (
+              <div className="cart-config-note">
+                <span>IVA incluido ({Math.round(config.tasaIva * 100)}%)</span>
+                <span>
+                  {envioGratis
+                    ? '¡Envío gratis!'
+                    : `Envío ${pesoFormatter.format(config.costoEnvio)} · gratis desde ${pesoFormatter.format(
+                        config.umbralEnvioGratis,
+                      )}`}
+                </span>
+              </div>
+            )}
             <button type="button" onClick={onContinueShopping}>
               Seguir comprando
             </button>
             <button
               type="button"
-              disabled={items.length === 0 || isLoading}
-              onClick={onCreateOrder}
+              disabled={items.length === 0 || isLoading || hasUnavailable}
+              onClick={onCheckout}
             >
               Confirmar compra
             </button>
@@ -1459,9 +1749,8 @@ type OrdersViewProps = {
   error: string
   message: string
   onRefresh: () => Promise<void>
-  onAdvance: (orderId: string) => Promise<void>
   onProcessPayment: (orderId: string, payment: PaymentRequest) => Promise<void>
-  onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
+  onSaveShippingAddress: (orderId: string, address: ShippingAddress) => Promise<void>
   onContinueShopping: () => void
 }
 
@@ -1471,9 +1760,8 @@ function OrdersView({
   error,
   message,
   onRefresh,
-  onAdvance,
   onProcessPayment,
-  onSaveShippingAndShip,
+  onSaveShippingAddress,
   onContinueShopping,
 }: OrdersViewProps) {
   return (
@@ -1512,9 +1800,8 @@ function OrdersView({
               key={order.id ?? `${order.fecha}-${order.total}`}
               order={order}
               isLoading={isLoading}
-              onAdvance={onAdvance}
               onProcessPayment={onProcessPayment}
-              onSaveShippingAndShip={onSaveShippingAndShip}
+              onSaveShippingAddress={onSaveShippingAddress}
             />
           ))}
         </div>
@@ -1523,22 +1810,20 @@ function OrdersView({
   )
 }
 
-type OrderCardProps = {
-  order: Order
+type PaymentFieldsProps = {
+  contextId: string
+  total: number
   isLoading: boolean
-  onAdvance: (orderId: string) => Promise<void>
-  onProcessPayment: (orderId: string, payment: PaymentRequest) => Promise<void>
-  onSaveShippingAndShip: (orderId: string, address: ShippingAddress) => Promise<void>
+  submitLabel: string
+  onSubmit: (payment: PaymentRequest) => void
 }
 
-function OrderCard({
-  order,
-  isLoading,
-  onAdvance,
-  onProcessPayment,
-  onSaveShippingAndShip,
-}: OrderCardProps) {
-  const [paymentMethod, setPaymentMethod] = useState<PaymentRequest['metodo']>('TARJETA')
+// Patron Strategy en el front: el selector elige el algoritmo de pago en runtime y arma
+// el PaymentRequest. Reutilizado por el checkout (Facade) y por el reintento en "Pedidos".
+// PayPal se resuelve via popup simulado (openPayPalPopup), desacoplado del id de pedido
+// mediante contextId, para que tambien funcione cuando el pedido aun no existe.
+function PaymentFields({ contextId, total, isLoading, submitLabel, onSubmit }: PaymentFieldsProps) {
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('TARJETA')
   const [paymentDraft, setPaymentDraft] = useState({
     titular: '',
     numero: '',
@@ -1546,56 +1831,6 @@ function OrderCard({
     cvv: '',
   })
   const [transferReceiptName, setTransferReceiptName] = useState('')
-  const [shippingDraft, setShippingDraft] = useState<ShippingAddress>({
-    calle: order.direccionEnvio?.calle ?? '',
-    numero: order.direccionEnvio?.numero ?? '',
-    ciudad: order.direccionEnvio?.ciudad ?? '',
-    provincia: order.direccionEnvio?.provincia ?? '',
-    codigoPostal: order.direccionEnvio?.codigoPostal ?? '',
-  })
-  const [deliverySeconds, setDeliverySeconds] = useState(60)
-
-  useEffect(() => {
-    if (order.estado !== 'Enviado' || !order.id) {
-      return
-    }
-
-    const orderId = order.id
-    const intervalId = window.setInterval(() => {
-      setDeliverySeconds((seconds) => Math.max(seconds - 1, 0))
-    }, 1000)
-    const timeoutId = window.setTimeout(() => {
-      void onAdvance(orderId)
-    }, 60000)
-
-    return () => {
-      window.clearInterval(intervalId)
-      window.clearTimeout(timeoutId)
-    }
-  }, [order.estado, order.id, onAdvance])
-
-  useEffect(() => {
-    function handlePayPalMessage(event: MessageEvent) {
-      if (
-        !order.id ||
-        typeof event.data !== 'object' ||
-        event.data === null ||
-        event.data.type !== 'RIVA_PAYPAL_APPROVED' ||
-        event.data.orderId !== order.id ||
-        typeof event.data.emailCuenta !== 'string'
-      ) {
-        return
-      }
-
-      void onProcessPayment(order.id, {
-        metodo: 'PAYPAL',
-        emailCuenta: event.data.emailCuenta,
-      })
-    }
-
-    window.addEventListener('message', handlePayPalMessage)
-    return () => window.removeEventListener('message', handlePayPalMessage)
-  }, [order.id, onProcessPayment])
 
   const canPay =
     paymentMethod === 'TARJETA'
@@ -1603,9 +1838,7 @@ function OrderCard({
         paymentDraft.numero.trim().length >= 13 &&
         paymentDraft.vencimiento.trim() !== '' &&
         paymentDraft.cvv.trim().length >= 3
-      : paymentMethod === 'PAYPAL'
-        ? false
-        : transferReceiptName.trim() !== ''
+      : transferReceiptName.trim() !== ''
 
   function buildPaymentRequest(): PaymentRequest {
     if (paymentMethod === 'TARJETA') {
@@ -1625,94 +1858,252 @@ function OrderCard({
     }
   }
 
-  function openPayPalWindow() {
-    if (!order.id || isLoading) {
+  async function handlePayPal() {
+    if (isLoading) {
       return
     }
-
-    const popup = window.open('', `riva-paypal-${order.id}`, 'width=460,height=560')
-    if (!popup) {
-      return
+    const emailCuenta = await openPayPalPopup(contextId, total)
+    if (emailCuenta) {
+      onSubmit({ metodo: 'PAYPAL', emailCuenta })
     }
-
-    popup.document.write(`
-      <!doctype html>
-      <html lang="es">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>PayPal - RIVA</title>
-          <style>
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: grid;
-              place-items: center;
-              background: #f7f9fc;
-              color: #10213f;
-              font-family: Inter, Arial, sans-serif;
-            }
-            form {
-              width: min(360px, calc(100vw - 32px));
-              display: grid;
-              gap: 14px;
-              padding: 28px;
-              background: white;
-              border: 1px solid #d7e0ef;
-              box-shadow: 0 18px 60px rgba(16, 33, 63, 0.14);
-            }
-            h1 {
-              margin: 0;
-              color: #003087;
-              font-size: 28px;
-            }
-            p {
-              margin: 0;
-              color: #526172;
-            }
-            input, button {
-              min-height: 44px;
-              font: inherit;
-            }
-            input {
-              border: 1px solid #c9d4e5;
-              padding: 10px 12px;
-            }
-            button {
-              border: 0;
-              background: #0070ba;
-              color: white;
-              font-weight: 800;
-              cursor: pointer;
-            }
-          </style>
-        </head>
-        <body>
-          <form id="paypal-form">
-            <h1>PayPal</h1>
-            <p>Pago simulado para pedido ${order.id.slice(0, 8)} por ${pesoFormatter.format(order.total)}.</p>
-            <input id="email" type="email" required placeholder="Email de cuenta PayPal" autofocus />
-            <input id="password" type="password" required placeholder="Contrasena" />
-            <button type="submit">Pagar con PayPal</button>
-          </form>
-          <script>
-            document.getElementById('paypal-form').addEventListener('submit', function (event) {
-              event.preventDefault();
-              var email = document.getElementById('email').value;
-              window.opener.postMessage({
-                type: 'RIVA_PAYPAL_APPROVED',
-                orderId: '${order.id}',
-                emailCuenta: email
-              }, '*');
-              window.close();
-            });
-          </script>
-        </body>
-      </html>
-    `)
-    popup.document.close()
   }
 
+  return (
+    <div className="order-form">
+      <p>Metodo de pago</p>
+      <select
+        value={paymentMethod}
+        onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+      >
+        <option value="TARJETA">Tarjeta</option>
+        <option value="PAYPAL">PayPal</option>
+        <option value="TRANSFERENCIA">Transferencia</option>
+      </select>
+      {paymentMethod === 'TARJETA' && (
+        <>
+          <input
+            placeholder="Titular"
+            value={paymentDraft.titular}
+            onChange={(event) => setPaymentDraft({ ...paymentDraft, titular: event.target.value })}
+          />
+          <input
+            placeholder="Numero de tarjeta"
+            value={paymentDraft.numero}
+            onChange={(event) => setPaymentDraft({ ...paymentDraft, numero: event.target.value })}
+          />
+          <input
+            placeholder="Vencimiento MM/YY"
+            value={paymentDraft.vencimiento}
+            onChange={(event) =>
+              setPaymentDraft({ ...paymentDraft, vencimiento: event.target.value })
+            }
+          />
+          <input
+            placeholder="CVV"
+            value={paymentDraft.cvv}
+            onChange={(event) => setPaymentDraft({ ...paymentDraft, cvv: event.target.value })}
+          />
+        </>
+      )}
+      {paymentMethod === 'PAYPAL' && (
+        <div className="payment-instructions">
+          <span>La autorizacion se completa en una ventana simulada de PayPal.</span>
+          <button type="button" disabled={isLoading} onClick={() => void handlePayPal()}>
+            Abrir PayPal
+          </button>
+        </div>
+      )}
+      {paymentMethod === 'TRANSFERENCIA' && (
+        <>
+          <div className="bank-transfer-details">
+            <span>CBU {rivaTransferAccount.cbu}</span>
+            <span>Alias {rivaTransferAccount.alias}</span>
+            <span>{rivaTransferAccount.banco}</span>
+          </div>
+          <label className="payment-file">
+            Comprobante
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(event) => setTransferReceiptName(event.target.files?.[0]?.name ?? '')}
+            />
+          </label>
+        </>
+      )}
+      {paymentMethod !== 'PAYPAL' && (
+        <button
+          type="button"
+          disabled={!canPay || isLoading}
+          onClick={() => onSubmit(buildPaymentRequest())}
+        >
+          {submitLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+type CheckoutViewProps = {
+  cart: Cart | null
+  config: StoreConfig | null
+  isLoading: boolean
+  error: string
+  onCheckout: (payment: PaymentRequest, direccionEnvio?: ShippingAddress) => Promise<void>
+  onBack: () => void
+}
+
+// Pantalla dedicada de checkout — superficie del patron Facade (TiendaFacade.confirmarCompra):
+// resumen del pedido, metodo de pago (Strategy) y direccion opcional, todo en un unico
+// POST /orders/checkout que crea el pedido, paga (State) y notifica (Observer).
+function CheckoutView({ cart, config, isLoading, error, onCheckout, onBack }: CheckoutViewProps) {
+  const items = cart?.items ?? []
+  const total = cart?.total ?? 0
+  const envioGratis = config ? total >= config.umbralEnvioGratis : false
+  const [shippingDraft, setShippingDraft] = useState<ShippingAddress>({
+    calle: '',
+    numero: '',
+    ciudad: '',
+    provincia: '',
+    codigoPostal: '',
+  })
+  // El pedido aun no existe; correlacionamos el popup de PayPal con un token estable.
+  const [checkoutContextId] = useState(() => `checkout-${Math.random().toString(36).slice(2)}`)
+
+  const shippingCompleta = Object.values(shippingDraft).every((value) => value.trim() !== '')
+
+  function handleSubmit(payment: PaymentRequest) {
+    void onCheckout(payment, shippingCompleta ? shippingDraft : undefined)
+  }
+
+  if (items.length === 0) {
+    return (
+      <section className="checkout-view">
+        <EmptyState
+          eyebrow="Checkout"
+          title="No hay nada para confirmar"
+          description="Tu carrito esta vacio. Agrega productos antes de confirmar la compra."
+          actionLabel="Volver al carrito"
+          onAction={onBack}
+        />
+      </section>
+    )
+  }
+
+  return (
+    <section className="checkout-view">
+      <div className="view-heading">
+        <p className="eyebrow">Checkout</p>
+        <h1>Confirmar compra</h1>
+        <p>Revisa tu pedido, elegi como pagar y confirma en un solo paso.</p>
+      </div>
+
+      {error && <p className="status-text is-error">{error}</p>}
+      {isLoading && <p className="status-text">Procesando tu compra...</p>}
+
+      <div className="checkout-layout">
+        <div className="checkout-summary">
+          <h2>Resumen</h2>
+          {items.map((item) => (
+            <div className="order-item" key={item.id}>
+              <span>{item.productName}</span>
+              <small>
+                {item.size ?? 'Unico'} / {item.color ?? 'Sin color'} x {item.cantidad}
+              </small>
+              <strong>{pesoFormatter.format(item.subtotal)}</strong>
+            </div>
+          ))}
+          <div className="checkout-total">
+            <span>Total</span>
+            <strong>{pesoFormatter.format(total)}</strong>
+          </div>
+          {config && (
+            <div className="cart-config-note">
+              <span>IVA incluido ({Math.round(config.tasaIva * 100)}%)</span>
+              <span>
+                {envioGratis
+                  ? '¡Envío gratis!'
+                  : `Envío ${pesoFormatter.format(config.costoEnvio)} · gratis desde ${pesoFormatter.format(
+                      config.umbralEnvioGratis,
+                    )}`}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="checkout-forms">
+          <div className="order-form">
+            <p>Direccion de envio (opcional)</p>
+            <span className="payment-instructions">
+              Podes cargarla ahora o mas tarde desde "Pedidos".
+            </span>
+            <input
+              placeholder="Calle"
+              value={shippingDraft.calle}
+              onChange={(event) => setShippingDraft({ ...shippingDraft, calle: event.target.value })}
+            />
+            <input
+              placeholder="Numero"
+              value={shippingDraft.numero}
+              onChange={(event) => setShippingDraft({ ...shippingDraft, numero: event.target.value })}
+            />
+            <input
+              placeholder="Ciudad"
+              value={shippingDraft.ciudad}
+              onChange={(event) => setShippingDraft({ ...shippingDraft, ciudad: event.target.value })}
+            />
+            <input
+              placeholder="Provincia"
+              value={shippingDraft.provincia}
+              onChange={(event) =>
+                setShippingDraft({ ...shippingDraft, provincia: event.target.value })
+              }
+            />
+            <input
+              placeholder="Codigo postal"
+              value={shippingDraft.codigoPostal}
+              onChange={(event) =>
+                setShippingDraft({ ...shippingDraft, codigoPostal: event.target.value })
+              }
+            />
+          </div>
+
+          <PaymentFields
+            contextId={checkoutContextId}
+            total={total}
+            isLoading={isLoading}
+            submitLabel="Pagar y confirmar"
+            onSubmit={handleSubmit}
+          />
+
+          <button className="ghost-button" type="button" onClick={onBack}>
+            Volver al carrito
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+type OrderCardProps = {
+  order: Order
+  isLoading: boolean
+  onProcessPayment: (orderId: string, payment: PaymentRequest) => Promise<void>
+  onSaveShippingAddress: (orderId: string, address: ShippingAddress) => Promise<void>
+}
+
+function OrderCard({
+  order,
+  isLoading,
+  onProcessPayment,
+  onSaveShippingAddress,
+}: OrderCardProps) {
+  const [shippingDraft, setShippingDraft] = useState<ShippingAddress>({
+    calle: order.direccionEnvio?.calle ?? '',
+    numero: order.direccionEnvio?.numero ?? '',
+    ciudad: order.direccionEnvio?.ciudad ?? '',
+    provincia: order.direccionEnvio?.provincia ?? '',
+    codigoPostal: order.direccionEnvio?.codigoPostal ?? '',
+  })
   const canShip =
     shippingDraft.calle.trim() !== '' &&
     shippingDraft.numero.trim() !== '' &&
@@ -1758,84 +2149,20 @@ function OrderCard({
         </p>
       )}
 
-      {order.estado === 'Pendiente' && (
-        <form
-          className="order-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (order.id && canPay) {
-              void onProcessPayment(order.id, buildPaymentRequest())
+      {order.estado === 'Pendiente' && order.id && (
+        // CU-19/20 — reintento de pago de un pedido que quedo Pendiente. Mismo
+        // formulario (Strategy) que el checkout, correlacionado por el id del pedido.
+        <PaymentFields
+          contextId={order.id}
+          total={order.total}
+          isLoading={isLoading}
+          submitLabel="Pagar"
+          onSubmit={(payment) => {
+            if (order.id) {
+              void onProcessPayment(order.id, payment)
             }
           }}
-        >
-          <p>Metodo de pago</p>
-          <select
-            value={paymentMethod}
-            onChange={(event) => setPaymentMethod(event.target.value as PaymentRequest['metodo'])}
-          >
-            <option value="TARJETA">Tarjeta</option>
-            <option value="PAYPAL">PayPal</option>
-            <option value="TRANSFERENCIA">Transferencia</option>
-          </select>
-          {paymentMethod === 'TARJETA' && (
-            <>
-              <input
-                placeholder="Titular"
-                value={paymentDraft.titular}
-                onChange={(event) => setPaymentDraft({ ...paymentDraft, titular: event.target.value })}
-              />
-              <input
-                placeholder="Numero de tarjeta"
-                value={paymentDraft.numero}
-                onChange={(event) => setPaymentDraft({ ...paymentDraft, numero: event.target.value })}
-              />
-              <input
-                placeholder="Vencimiento MM/YY"
-                value={paymentDraft.vencimiento}
-                onChange={(event) =>
-                  setPaymentDraft({ ...paymentDraft, vencimiento: event.target.value })
-                }
-              />
-              <input
-                placeholder="CVV"
-                value={paymentDraft.cvv}
-                onChange={(event) => setPaymentDraft({ ...paymentDraft, cvv: event.target.value })}
-              />
-            </>
-          )}
-          {paymentMethod === 'PAYPAL' && (
-            <div className="payment-instructions">
-              <span>La autorizacion se completa en una ventana simulada de PayPal.</span>
-              <button type="button" disabled={!order.id || isLoading} onClick={openPayPalWindow}>
-                Abrir PayPal
-              </button>
-            </div>
-          )}
-          {paymentMethod === 'TRANSFERENCIA' && (
-            <>
-              <div className="bank-transfer-details">
-                <span>CBU {rivaTransferAccount.cbu}</span>
-                <span>Alias {rivaTransferAccount.alias}</span>
-                <span>{rivaTransferAccount.banco}</span>
-              </div>
-              <label className="payment-file">
-                Comprobante
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(event) =>
-                    setTransferReceiptName(event.target.files?.[0]?.name ?? '')
-                  }
-                />
-              </label>
-            </>
-          )}
-          {paymentMethod !== 'PAYPAL' && (
-            <button type="submit" disabled={!order.id || !canPay || isLoading}>
-              Pagar
-            </button>
-          )}
-        </form>
+        />
       )}
 
       {order.estado === 'Pagado' && (
@@ -1844,11 +2171,14 @@ function OrderCard({
           onSubmit={(event) => {
             event.preventDefault()
             if (order.id && canShip) {
-              void onSaveShippingAndShip(order.id, shippingDraft)
+              void onSaveShippingAddress(order.id, shippingDraft)
             }
           }}
         >
           <p>Direccion de envio</p>
+          <span className="payment-instructions">
+            Cargá tu dirección. El despacho lo confirma el vendedor.
+          </span>
           <input
             placeholder="Calle"
             value={shippingDraft.calle}
@@ -1879,7 +2209,7 @@ function OrderCard({
             }
           />
           <button type="submit" disabled={!order.id || !canShip || isLoading}>
-            Guardar direccion y enviar
+            Guardar direccion
           </button>
         </form>
       )}
@@ -1887,8 +2217,7 @@ function OrderCard({
       {order.estado === 'Enviado' && (
         <div className="delivery-simulation">
           <p>Pedido en camino</p>
-          <strong>{deliverySeconds}s</strong>
-          <span>La entrega se confirma automaticamente al terminar la simulacion.</span>
+          <span>Te avisaremos cuando el vendedor confirme la entrega.</span>
         </div>
       )}
 
@@ -2187,6 +2516,181 @@ function NotificationsView({ initialPreferences, isLoading, error, message, onSa
         {message && <p className="status-text is-success">{message}</p>}
         {error && <p className="status-text is-error">{error}</p>}
       </form>
+    </section>
+  )
+}
+
+type AccountViewProps = {
+  isLoading: boolean
+  error: string
+  message: string
+  onChangePassword: (actual: string, nueva: string) => Promise<void>
+}
+
+// CU-06 — Cambiar Contrasena (Cliente o Administrador).
+function AccountView({ isLoading, error, message, onChangePassword }: AccountViewProps) {
+  const [actual, setActual] = useState('')
+  const [nueva, setNueva] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [formError, setFormError] = useState('')
+
+  const canSubmit = actual !== '' && nueva !== '' && confirm !== ''
+
+  return (
+    <section className="admin-auth">
+      <div className="view-heading">
+        <p className="eyebrow">Mi cuenta</p>
+        <h1>Cambiar contrasena</h1>
+        <p>Actualiza tu contrasena de acceso.</p>
+      </div>
+
+      <form
+        className="order-form admin-login-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setFormError('')
+          // CU-06 excepcion: las dos contrasenas nuevas deben coincidir.
+          if (nueva !== confirm) {
+            setFormError('Las contrasenas nuevas no coinciden.')
+            return
+          }
+          if (canSubmit && !isLoading) {
+            void onChangePassword(actual, nueva)
+            setActual('')
+            setNueva('')
+            setConfirm('')
+          }
+        }}
+      >
+        <label>
+          Contrasena actual
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={actual}
+            onChange={(event) => setActual(event.target.value)}
+          />
+        </label>
+        <label>
+          Nueva contrasena
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={nueva}
+            onChange={(event) => setNueva(event.target.value)}
+            placeholder="Min. 8 caracteres con mayuscula y numero"
+          />
+        </label>
+        <label>
+          Repetir nueva contrasena
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+          />
+        </label>
+        <button type="submit" disabled={!canSubmit || isLoading}>
+          {isLoading ? 'Guardando...' : 'Cambiar contrasena'}
+        </button>
+        {message && <p className="status-text is-success">{message}</p>}
+        {formError && <p className="status-text is-error">{formError}</p>}
+        {error && <p className="status-text is-error">{error}</p>}
+      </form>
+    </section>
+  )
+}
+
+// CU-23 — proxima transicion disponible segun el estado actual (patron State).
+// Solo el administrador avanza Pagado -> Enviado -> Entregado.
+const nextOrderState: Record<string, string | undefined> = {
+  Pagado: 'Enviado',
+  Enviado: 'Entregado',
+}
+
+type AdminOrdersViewProps = {
+  orders: Order[]
+  isLoading: boolean
+  error: string
+  message: string
+  onRefresh: () => Promise<void>
+  onAdvance: (orderId: string) => Promise<void>
+}
+
+// CU-23 — Avanzar Estado de Pedido (panel del administrador).
+function AdminOrdersView({ orders, isLoading, error, message, onRefresh, onAdvance }: AdminOrdersViewProps) {
+  return (
+    <section className="orders-view">
+      <div className="view-heading">
+        <p className="eyebrow">Administracion</p>
+        <h1>Gestion de pedidos</h1>
+        <p>Avanza el estado de cada pedido (State); el cliente recibe la notificacion (Observer).</p>
+      </div>
+
+      <div className="orders-toolbar">
+        <button type="button" disabled={isLoading} onClick={onRefresh}>
+          Actualizar
+        </button>
+      </div>
+
+      {message && <p className="status-text is-success">{message}</p>}
+      {error && <p className="status-text is-error">{error}</p>}
+      {isLoading && <p className="status-text">Actualizando pedidos...</p>}
+
+      {orders.length === 0 && !isLoading ? (
+        <EmptyState
+          eyebrow="Sin pedidos"
+          title="No hay pedidos registrados"
+          description="Cuando los clientes confirmen y paguen compras, apareceran aca."
+          actionLabel="Actualizar"
+          onAction={onRefresh}
+        />
+      ) : (
+        <div className="orders-list">
+          {orders.map((order) => {
+            const next = nextOrderState[order.estado]
+            return (
+              <article className="order-card" key={order.id ?? `${order.fecha}-${order.total}`}>
+                <header className="order-card-header">
+                  <div>
+                    <strong>Pedido {order.id?.slice(0, 8) ?? '—'}</strong>
+                    <span> · Cliente {order.clienteId.slice(0, 8)}</span>
+                  </div>
+                  <span className="order-state-badge">{order.estado}</span>
+                </header>
+                <p>
+                  {new Date(order.fecha).toLocaleString('es-AR')} ·{' '}
+                  {pesoFormatter.format(order.total)} ·{' '}
+                  {order.metodoPagoNombre ?? 'Sin pago'}
+                </p>
+                <ul className="order-items">
+                  {order.items.map((item) => (
+                    <li key={item.id}>
+                      {item.cantidad}× {item.productoNombre} ({item.talla ?? 'Unico'} /{' '}
+                      {item.color ?? 'Sin color'})
+                    </li>
+                  ))}
+                </ul>
+                {next ? (
+                  <button
+                    type="button"
+                    disabled={isLoading || !order.id}
+                    onClick={() => order.id && onAdvance(order.id)}
+                  >
+                    Avanzar a {next}
+                  </button>
+                ) : (
+                  <span className="payment-instructions">
+                    {order.estado === 'Entregado'
+                      ? 'Ciclo finalizado.'
+                      : 'Esperando el pago del cliente.'}
+                  </span>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      )}
     </section>
   )
 }

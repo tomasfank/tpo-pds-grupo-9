@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -79,6 +80,27 @@ class CarritoServiceTest {
         ArgumentCaptor<Carrito> captor = ArgumentCaptor.forClass(Carrito.class);
         verify(carritoRepository).save(captor.capture());
         assertThat(captor.getValue().getItems()).isEmpty();
+    }
+
+    @Test
+    void productosInactivosDetectaProductosDesactivadosEnElCarrito() {
+        Carrito carrito = new Carrito("cliente-1");
+        carrito.agregarItem(
+                new ProductVariant("var-1", Size.M, "Negro", 5, BigDecimal.valueOf(100), "prod-activo", "Remera"), 1);
+        carrito.agregarItem(
+                new ProductVariant("var-2", Size.L, "Azul", 5, BigDecimal.valueOf(100), "prod-inactivo", "Campera"), 1);
+        Product activo = product("prod-activo", true, variant("var-1", 5));
+        Product inactivo = product("prod-inactivo", false, variant("var-2", 5));
+        when(productRepository.findAllById(any())).thenReturn(List.of(activo, inactivo));
+
+        Set<String> inactivos = carritoService.productosInactivos(carrito);
+
+        assertThat(inactivos).containsExactly("prod-inactivo");
+    }
+
+    @Test
+    void productosInactivosVacioCuandoElCarritoEstaVacio() {
+        assertThat(carritoService.productosInactivos(new Carrito("cliente-1"))).isEmpty();
     }
 
     private static Product product(String id, boolean active, ProductVariant... variants) {

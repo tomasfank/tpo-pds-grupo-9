@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.riva.dto.CheckoutRequest;
+import com.riva.dto.CheckoutResponse;
 import com.riva.dto.CreatePedidoRequest;
 import com.riva.dto.DireccionEnvioRequest;
 import com.riva.dto.PedidoResponse;
@@ -19,15 +21,20 @@ import com.riva.dto.ProcesarPagoResponse;
 import com.riva.model.pedido.Pedido;
 import com.riva.security.UsuarioPrincipal;
 import com.riva.service.PedidoService;
+import com.riva.service.TiendaFacade;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/orders")
 public class PedidoController {
 
     private final PedidoService pedidoService;
+    private final TiendaFacade tiendaFacade;
 
-    public PedidoController(PedidoService pedidoService) {
+    public PedidoController(PedidoService pedidoService, TiendaFacade tiendaFacade) {
         this.pedidoService = pedidoService;
+        this.tiendaFacade = tiendaFacade;
     }
 
     @PostMapping
@@ -47,6 +54,14 @@ public class PedidoController {
                 .toList();
     }
 
+    @GetMapping("/admin")
+    public List<PedidoResponse> listarTodos() {
+        // CU-23 — listado de todos los pedidos. Restringido a ROLE_ADMINISTRADOR en SecurityConfig.
+        return pedidoService.listarTodos().stream()
+                .map(PedidoResponse::from)
+                .toList();
+    }
+
     @GetMapping("/{id}")
     public PedidoResponse detalle(
             @AuthenticationPrincipal UsuarioPrincipal principal,
@@ -58,6 +73,17 @@ public class PedidoController {
     public PedidoResponse avanzar(@PathVariable String id) {
         // Restringido a ROLE_ADMINISTRADOR en SecurityConfig (CU-23).
         return PedidoResponse.from(pedidoService.avanzarEstado(id));
+    }
+
+    @PostMapping("/checkout")
+    public CheckoutResponse checkout(
+            @AuthenticationPrincipal UsuarioPrincipal principal,
+            @Valid @RequestBody CheckoutRequest request) {
+        // Patron Facade: confirma la compra completa (crear pedido + pagar + notificar) en un paso.
+        return tiendaFacade.confirmarCompra(
+                principal.userId(),
+                request.pago(),
+                request.direccionEnvio() == null ? null : request.direccionEnvio().toModel());
     }
 
     @PostMapping("/{id}/payment")
