@@ -68,6 +68,10 @@
   font-size: 14px;
 }
 
+.main-nav button.is-subcategory {
+  font-size: 13px;
+}
+
 .main-nav button:hover,
 .cart-link:hover {
   color: var(--ink);
@@ -230,8 +234,18 @@ h3 {
 }
 
 .category-item span {
+  display: grid;
+  gap: 5px;
   font-size: 24px;
   font-weight: 850;
+}
+
+.category-item .subcategory-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .category-item small {

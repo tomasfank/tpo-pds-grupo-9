@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { isAxiosError } from 'axios'
 import './App.css'
 import {
@@ -40,6 +40,7 @@ import {
   updateNotificationPreferences,
 } from './api/notifications'
 import { getConfig } from './api/config'
+import { buildCategoryNavigationItems } from './catalogNavigation'
 import {
   activateCategory,
   createCategory,
@@ -965,6 +966,10 @@ function App() {
     ? findCategory(categories, route.categoryId)
     : undefined
   const featuredProducts = useMemo(() => products.slice(0, 4), [products])
+  const categoryNavigationItems = useMemo(
+    () => buildCategoryNavigationItems(categories),
+    [categories],
+  )
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories])
   const cartItemsCount = cart?.items.reduce((total, item) => total + item.cantidad, 0) ?? 0
   const isAdmin = session?.rol === 'ADMINISTRADOR'
@@ -981,10 +986,12 @@ function App() {
           <button type="button" onClick={() => navigate({ view: 'home' })}>
             Inicio
           </button>
-          {categories.map((category) => (
+          {categoryNavigationItems.map(({ category, depth }) => (
             <button
               key={category.id}
               type="button"
+              className={depth > 0 ? 'is-subcategory' : undefined}
+              style={depth > 0 ? ({ paddingLeft: 13 + depth * 10 } as CSSProperties) : undefined}
               onClick={() => navigate({ view: 'category', categoryId: category.id })}
             >
               {category.name}
@@ -1067,7 +1074,7 @@ function App() {
         {route.view === 'home' && (
           <>
             <HomeView
-              categories={categories}
+              categories={categoryNavigationItems}
               products={featuredProducts}
               isLoading={isLoading}
               error={error}
@@ -1339,7 +1346,7 @@ function App() {
 }
 
 type HomeViewProps = {
-  categories: CategoryTreeNode[]
+  categories: ReturnType<typeof buildCategoryNavigationItems>
   products: Product[]
   isLoading: boolean
   error: string
@@ -1365,7 +1372,7 @@ function HomeView({
             Catalogo de indumentaria con categorias, variantes y stock real del backend.
           </p>
           <div className="hero-actions">
-            {categories.slice(0, 2).map((category) => (
+            {categories.slice(0, 2).map(({ category }) => (
               <button
                 key={category.id}
                 type="button"
@@ -1384,14 +1391,18 @@ function HomeView({
           <h2 id="category-title">Recorridos de compra</h2>
         </div>
         <div className="category-list">
-          {categories.map((category) => (
+          {categories.map(({ category, depth }) => (
             <button
               className="category-item"
               type="button"
               key={category.id}
+              style={{ paddingLeft: depth * 28 }}
               onClick={() => onCategorySelect(category.id)}
             >
-              <span>{category.name}</span>
+              <span>
+                {depth > 0 && <small className="subcategory-label">Subcategoria</small>}
+                {category.name}
+              </span>
               <small>{category.activeProducts} productos activos</small>
             </button>
           ))}
